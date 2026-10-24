@@ -2412,42 +2412,30 @@
         @media screen {
             html[data-theme="dark"] {
                 color-scheme: dark;
-                --page-bg: #0b1220;
-                --surface: #111827;
-                --surface-raised: #172235;
-                --surface-muted: #1e293b;
-                --surface-hover: #263449;
-                --input-bg: #0f172a;
-                --border: #334155;
-                --border-subtle: #263449;
-                --text: #e2e8f0;
-                --text-strong: #f8fafc;
-                --text-secondary: #cbd5e1;
-                --text-muted: #94a3b8;
             }
 
             html[data-theme="dark"] body {
-                background: var(--page-bg);
-                color: var(--text);
+                background: #0b1220;
+                color: #e2e8f0;
             }
 
             html[data-theme="dark"] .app,
             html[data-theme="dark"] .auth-card,
             html[data-theme="dark"] .dashboard-view {
-                background: var(--surface);
-                border-color: var(--border-subtle);
+                background: #111827;
+                border-color: #263449;
                 box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28), 0 8px 24px rgba(0, 0, 0, 0.18);
             }
 
             html[data-theme="dark"] .dashboard-header,
             html[data-theme="dark"] .invoice-card-actions {
-                border-color: var(--border-subtle);
+                border-color: #263449;
             }
 
             html[data-theme="dark"] .app-header h1 .fa-file-invoice,
             html[data-theme="dark"] .section-title,
             html[data-theme="dark"] .section-title .fa-icon {
-                color: var(--text-strong);
+                color: #f8fafc;
             }
 
             html[data-theme="dark"] .app-header h1 span,
@@ -2456,18 +2444,18 @@
             html[data-theme="dark"] .dashboard-brand-mark,
             html[data-theme="dark"] .dashboard-currency {
                 background: #334155;
-                color: var(--text-strong);
+                color: #f8fafc;
             }
 
             html[data-theme="dark"] .theme-toggle {
-                border-color: var(--border);
-                background: var(--surface-raised);
+                border-color: #334155;
+                background: #172235;
                 color: #fde68a;
             }
 
             html[data-theme="dark"] .theme-toggle:hover {
                 border-color: #475569;
-                background: var(--surface-hover);
+                background: #263449;
                 color: #fef3c7;
             }
 
@@ -2478,36 +2466,36 @@
             html[data-theme="dark"] .summary-row,
             html[data-theme="dark"] .history-item,
             html[data-theme="dark"] .backup-section .card {
-                background: var(--surface-raised);
-                border-color: var(--border-subtle);
+                background: #172235;
+                border-color: #263449;
             }
 
             html[data-theme="dark"] .tab-btn,
             html[data-theme="dark"] .auth-mode {
-                color: var(--text-muted);
+                color: #94a3b8;
             }
 
             html[data-theme="dark"] .tab-btn:hover,
             html[data-theme="dark"] .auth-mode:hover {
-                color: var(--text-strong);
+                color: #f8fafc;
             }
 
             html[data-theme="dark"] .tab-btn.active,
             html[data-theme="dark"] .auth-mode.active {
                 background: #263449;
-                color: var(--text-strong);
+                color: #f8fafc;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
             }
 
             html[data-theme="dark"] .tab-btn .badge-tab,
             html[data-theme="dark"] .section-title .badge {
                 background: #334155;
-                color: var(--text-secondary);
+                color: #cbd5e1;
             }
 
             html[data-theme="dark"] .tab-btn.active .badge-tab {
                 background: #475569;
-                color: var(--text-strong);
+                color: #f8fafc;
             }
 
             html[data-theme="dark"] .form-group label,
@@ -2523,7 +2511,7 @@
             html[data-theme="dark"] .backup-section .card p,
             html[data-theme="dark"] .modal-box .modal-sub,
             html[data-theme="dark"] .modal-box .form-group label {
-                color: var(--text-muted);
+                color: #94a3b8;
             }
 
             html[data-theme="dark"] .auth-intro h1,
@@ -2537,12 +2525,12 @@
             html[data-theme="dark"] .history-item .info .name,
             html[data-theme="dark"] .backup-section .card h3,
             html[data-theme="dark"] .modal-box .modal-title {
-                color: var(--text-strong);
+                color: #f8fafc;
             }
 
             html[data-theme="dark"] .auth-brand,
             html[data-theme="dark"] .dashboard-brand {
-                color: var(--text-strong);
+                color: #f8fafc;
             }
 
             html[data-theme="dark"] .auth-feedback,
@@ -2556,7 +2544,7 @@
             html[data-theme="dark"] .invoice-card-client,
             html[data-theme="dark"] .invoice-card-meta,
             html[data-theme="dark"] .invoice-card-action {
-                color: var(--text-muted);
+                color: #94a3b8;
             }
 
             html[data-theme="dark"] .form-group input:not([type="range"]):not([type="color"]),
@@ -2565,9 +2553,9 @@
             html[data-theme="dark"] .modal-box .form-group input,
             html[data-theme="dark"] .history-item .rename-input,
             html[data-theme="dark"] .logo-options .form-group input[type="range"] {
-                border-color: var(--border);
-                background: var(--input-bg);
-                color: var(--text);
+                border-color: #334155;
+                background: #0f172a;
+                color: #e2e8f0;
                 color-scheme: dark;
             }
 
@@ -2588,7 +2576,7 @@
 
             html[data-theme="dark"] .logo-preview {
                 background: #ffffff;
-                border-color: var(--border);
+                border-color: #334155;
             }
 
             html[data-theme="dark"] .logo-preview .placeholder,
@@ -2597,20 +2585,20 @@
             }
 
             html[data-theme="dark"] .items-table-wrap {
-                border-color: var(--border-subtle);
+                border-color: #263449;
             }
 
             html[data-theme="dark"] .items-table th {
                 background: #172235;
-                border-bottom-color: var(--border-subtle);
+                border-bottom-color: #263449;
             }
 
             html[data-theme="dark"] .items-table td {
-                border-bottom-color: var(--border-subtle);
+                border-bottom-color: #263449;
             }
 
             html[data-theme="dark"] .items-table input {
-                color: var(--text);
+                color: #e2e8f0;
             }
 
             html[data-theme="dark"] .items-table input:hover {
@@ -2625,14 +2613,14 @@
 
             html[data-theme="dark"] .summary-line.total,
             html[data-theme="dark"] .summary-line.balance {
-                border-top-color: var(--border) !important;
+                border-top-color: #334155 !important;
             }
 
             html[data-theme="dark"] .btn-primary,
             html[data-theme="dark"] .btn-small.primary,
             html[data-theme="dark"] .history-item .actions .btn-sm.edit {
                 background: #334155;
-                color: var(--text-strong);
+                color: #f8fafc;
             }
 
             html[data-theme="dark"] .btn-primary:hover,
@@ -2646,8 +2634,8 @@
             html[data-theme="dark"] .btn-add-item,
             html[data-theme="dark"] .history-item .actions .btn-sm,
             html[data-theme="dark"] .invoice-card-action {
-                background: var(--surface-muted);
-                color: var(--text-secondary);
+                background: #1e293b;
+                color: #cbd5e1;
             }
 
             html[data-theme="dark"] .btn-secondary:hover,
@@ -2655,8 +2643,8 @@
             html[data-theme="dark"] .btn-add-item:hover,
             html[data-theme="dark"] .history-item .actions .btn-sm:hover,
             html[data-theme="dark"] .invoice-card-action:hover {
-                background: var(--surface-hover);
-                color: var(--text-strong);
+                background: #263449;
+                color: #f8fafc;
             }
 
             html[data-theme="dark"] .btn-small.danger,
@@ -2675,7 +2663,7 @@
 
             html[data-theme="dark"] .history-item .actions .btn-sm.duplicate {
                 background: #263449;
-                color: var(--text-secondary);
+                color: #cbd5e1;
             }
 
             html[data-theme="dark"] .history-item .actions .btn-sm.rename {
@@ -2684,7 +2672,7 @@
             }
 
             html[data-theme="dark"] .btn-remove-item {
-                color: var(--text-muted);
+                color: #94a3b8;
             }
 
             html[data-theme="dark"] .btn-remove-item:hover {
@@ -2715,7 +2703,7 @@
             html[data-theme="dark"] .invoice-card-status,
             html[data-theme="dark"] .dashboard-empty .empty-icon {
                 background: #263449;
-                color: var(--text-secondary);
+                color: #cbd5e1;
             }
 
             html[data-theme="dark"] .invoice-card-status.paid {
@@ -2724,9 +2712,9 @@
             }
 
             html[data-theme="dark"] .invoice-card {
-                border-color: var(--border);
+                border-color: #334155;
                 background: #172235;
-                color: var(--text);
+                color: #e2e8f0;
             }
 
             html[data-theme="dark"] .invoice-card:hover {
@@ -2736,11 +2724,11 @@
 
             html[data-theme="dark"] .dashboard-empty {
                 border-color: #475569;
-                color: var(--text-muted);
+                color: #94a3b8;
             }
 
             html[data-theme="dark"] .dashboard-empty h2 {
-                color: var(--text-strong);
+                color: #f8fafc;
             }
 
             html[data-theme="dark"] .cloud-status-badge .dot,
@@ -2763,9 +2751,9 @@
             }
 
             html[data-theme="dark"] .modal-box {
-                background: var(--surface);
-                color: var(--text);
-                border: 1px solid var(--border-subtle);
+                background: #111827;
+                color: #e2e8f0;
+                border: 1px solid #263449;
             }
 
             html[data-theme="dark"] .modal-box .modal-status.success {
@@ -2787,19 +2775,19 @@
             }
 
             html[data-theme="dark"] .backup-section .card[style] {
-                border-color: var(--border) !important;
+                border-color: #334155 !important;
             }
 
             html[data-theme="dark"] .backup-section .card [style*="color"] {
-                color: var(--text-muted) !important;
+                color: #94a3b8 !important;
             }
 
             html[data-theme="dark"] .backup-section .card .fa-cloud {
-                color: var(--text-secondary) !important;
+                color: #cbd5e1 !important;
             }
 
             html[data-theme="dark"] .backup-section .card > div[style*="border-top"] {
-                border-top-color: var(--border-subtle) !important;
+                border-top-color: #263449 !important;
             }
 
             html[data-theme="dark"] button:focus-visible,
