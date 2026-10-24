@@ -1814,3 +1814,550 @@
             size: A4;
             margin: 12mm;
         }
+
+        /* ── account access ─────────────────────────────────── */
+        .auth-view {
+            width: 100%;
+            min-height: calc(100vh - 48px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-card {
+            width: min(100%, 440px);
+            background: #ffffff;
+            border: 1px solid #edf0f4;
+            border-radius: 24px;
+            padding: 36px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
+        }
+
+        .auth-brand,
+        .dashboard-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: #1e293b;
+            font-weight: 700;
+            letter-spacing: -0.4px;
+        }
+
+        .auth-brand-mark,
+        .dashboard-brand-mark {
+            width: 38px;
+            height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: #1e293b;
+            color: #fff;
+            font-size: 17px;
+        }
+
+        .auth-currency,
+        .dashboard-currency {
+            background: #1e293b;
+            color: #fff;
+            border-radius: 100px;
+            padding: 2px 9px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .auth-intro {
+            margin: 32px 0 22px;
+        }
+
+        .auth-eyebrow,
+        .dashboard-eyebrow {
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            margin-bottom: 8px;
+        }
+
+        .auth-intro h1 {
+            color: #0f172a;
+            font-size: 28px;
+            line-height: 1.2;
+            letter-spacing: -0.7px;
+            margin-bottom: 8px;
+        }
+
+        .auth-intro p:last-child {
+            color: #64748b;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .auth-mode-switch {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            background: #f1f4f9;
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 22px;
+        }
+
+        .auth-mode {
+            min-height: 42px;
+            border: 0;
+            border-radius: 9px;
+            background: transparent;
+            color: #64748b;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .auth-mode.active {
+            background: #fff;
+            color: #0f172a;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .auth-card .form-group {
+            margin-bottom: 16px;
+        }
+
+        .auth-feedback {
+            min-height: 20px;
+            margin: -2px 0 12px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #64748b;
+        }
+
+        .auth-feedback.error {
+            color: #b91c1c;
+        }
+
+        .auth-feedback.success {
+            color: #047857;
+        }
+
+        .auth-password-hint {
+            margin-top: 2px;
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .auth-submit {
+            width: 100%;
+            min-height: 46px;
+            justify-content: center;
+        }
+
+        .auth-footnote {
+            margin-top: 22px;
+            color: #94a3b8;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        /* ── saved-invoice dashboard ────────────────────────── */
+        .dashboard-view {
+            width: 100%;
+            max-width: 1200px;
+            margin: auto;
+            background: #fff;
+            border: 1px solid #edf0f4;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
+            overflow: hidden;
+        }
+
+        .dashboard-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 24px 36px;
+            border-bottom: 1px solid #eef1f5;
+        }
+
+        .dashboard-user {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .dashboard-user-name {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .dashboard-content {
+            padding: 36px;
+        }
+
+        .dashboard-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            margin-bottom: 28px;
+        }
+
+        .dashboard-heading h1 {
+            margin: 0 0 8px;
+            color: #0f172a;
+            font-size: 28px;
+            line-height: 1.2;
+            letter-spacing: -0.7px;
+        }
+
+        .dashboard-subtitle {
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .dashboard-new-btn {
+            white-space: nowrap;
+        }
+
+        .dashboard-tools {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            background: #f8fafc;
+            border: 1px solid #edf0f4;
+            border-radius: 14px;
+        }
+
+        .dashboard-tools-spacer {
+            flex: 1 1 12px;
+        }
+
+        .dashboard-restore-wrap {
+            min-height: 34px;
+        }
+
+        .dashboard-restore-wrap input[type="file"] {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            font-size: 0;
+        }
+
+        .dashboard-cloud-status {
+            min-height: 20px;
+            margin: 8px 2px 12px;
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .dashboard-cloud-status.error {
+            color: #b91c1c;
+        }
+
+        .dashboard-cloud-status.success {
+            color: #047857;
+        }
+
+        .dashboard-invoice-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
+            gap: 16px;
+        }
+
+        .invoice-card {
+            min-width: 0;
+            width: 100%;
+            padding: 10px 16px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            background: #fff;
+            color: #1e293b;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+        }
+
+        .invoice-card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .invoice-card-open {
+            display: block;
+            width: 100%;
+            padding: 10px 4px 14px;
+            border: 0;
+            background: transparent;
+            color: inherit;
+            text-align: left;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .invoice-card-open:focus-visible {
+            outline: 3px solid #2563eb;
+            outline-offset: 2px;
+            border-radius: 8px;
+        }
+
+        .invoice-card-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            padding-top: 10px;
+            border-top: 1px solid #eef1f5;
+        }
+
+        .invoice-card-action {
+            padding: 5px 9px;
+            border: 0;
+            border-radius: 7px;
+            background: #f8fafc;
+            color: #64748b;
+            font: inherit;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .invoice-card-action:hover {
+            background: #f1f4f9;
+            color: #0f172a;
+        }
+
+        .invoice-card-action.delete {
+            color: #b91c1c;
+        }
+
+        .invoice-card-action.delete:hover,
+        .dashboard-clear-history:hover {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .invoice-card-top,
+        .invoice-card-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .invoice-card-top {
+            margin-bottom: 22px;
+        }
+
+        .invoice-card-icon {
+            width: 36px;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            border-radius: 11px;
+            background: #f1f4f9;
+            color: #334155;
+        }
+
+        .invoice-card-status {
+            padding: 4px 9px;
+            border-radius: 100px;
+            background: #f1f4f9;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .invoice-card-status.paid {
+            background: #ecfdf5;
+            color: #047857;
+        }
+
+        .invoice-card-title {
+            display: block;
+            overflow: hidden;
+            margin-bottom: 5px;
+            color: #0f172a;
+            font-size: 16px;
+            font-weight: 600;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .invoice-card-client,
+        .invoice-card-meta {
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .invoice-card-client {
+            display: block;
+            min-height: 18px;
+            margin-bottom: 18px;
+        }
+
+        .invoice-card-bottom {
+            padding-top: 12px;
+            border-top: 1px solid #eef1f5;
+        }
+
+        .invoice-card-total {
+            color: #0f172a;
+            font-size: 15px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .dashboard-empty {
+            grid-column: 1 / -1;
+            padding: 56px 24px;
+            border: 1px dashed #cbd5e1;
+            border-radius: 16px;
+            color: #64748b;
+            text-align: center;
+        }
+
+        .dashboard-empty .empty-icon {
+            width: 52px;
+            height: 52px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+            border-radius: 16px;
+            background: #f1f4f9;
+            color: #334155;
+            font-size: 20px;
+        }
+
+        .dashboard-empty h2 {
+            margin-bottom: 6px;
+            color: #0f172a;
+            font-size: 18px;
+        }
+
+        .dashboard-empty p {
+            margin-bottom: 18px;
+            font-size: 13px;
+        }
+
+        .dashboard-footer {
+            padding: 18px 36px;
+            border-top: 1px solid #eef1f5;
+            color: #94a3b8;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .app-header .header-actions .btn-primary {
+            padding: 7px 14px;
+            font-size: 13px;
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 12px;
+            }
+
+            .auth-view {
+                min-height: calc(100vh - 24px);
+            }
+
+            .auth-card {
+                padding: 26px 22px;
+                border-radius: 18px;
+            }
+
+            .dashboard-header {
+                align-items: flex-start;
+                padding: 18px;
+            }
+
+            .dashboard-user {
+                align-items: flex-end;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .dashboard-content {
+                padding: 24px 18px;
+            }
+
+            .dashboard-heading {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .dashboard-heading h1 {
+                font-size: 24px;
+            }
+
+            .dashboard-tools-spacer {
+                display: none;
+            }
+
+            .dashboard-tools > button,
+            .dashboard-restore-wrap {
+                flex: 1 1 calc(50% - 8px);
+                justify-content: center;
+            }
+
+            .dashboard-invoice-list {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-footer {
+                padding: 16px 18px;
+            }
+        }
+
+        @media (max-width: 420px) {
+            .dashboard-brand {
+                font-size: 14px;
+            }
+
+            .dashboard-brand-mark {
+                width: 34px;
+                height: 34px;
+            }
+
+            .dashboard-user-name {
+                max-width: 120px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .dashboard-user .btn-small {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+
+            .dashboard-tools > button,
+            .dashboard-restore-wrap {
+                flex-basis: 100%;
+            }
+
+            .app-header .header-actions .btn-primary {
+                padding: 5px 10px;
+                font-size: 12px !important;
+            }
+        }
+
+        .dashboard-install {
+            padding: 7px 12px;
+            white-space: nowrap;
+        }
