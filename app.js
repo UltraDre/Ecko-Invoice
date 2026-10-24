@@ -230,6 +230,9 @@
 
         let saveTimeout = null;
         let toastTimeout = null;
+        let cloudSyncTimeout = null;
+        let cloudSyncBusy = false;
+        let cloudSyncPending = null;
 
         const CURRENCY = '₦';
 
@@ -345,7 +348,10 @@
 
         // ─── localStorage ──────────────────────────────────────
 
-        function saveState() {
+        function saveState(options = {}) {
+            if (options.history !== false && invoiceHasContent() && !currentHistoryId) {
+                currentHistoryId = 'hist_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+            }
             const data = {
                 invoiceName: invoiceNameInput.value,
                 companyName: companyName.value,
@@ -373,25 +379,39 @@
                 paidDate: state.paidDate,
                 prevAmountPaid: state.prevAmountPaid,
                 currentHistoryId,
+                updatedAt: new Date().toISOString(),
             };
+            let saved = false;
+            let savedData = data;
             try {
                 setUserData('invoiceState', JSON.stringify(data));
-                showSaveIndicator('Saved', false);
-            } catch (e) {
-                if (e.name === 'QuotaExceededError' || e.code === 22) {
+                saved = true;
+                showSaveIndicator('Saved locally', false);
+            } catch (error) {
+                if (error.name === 'QuotaExceededError' || error.code === 22) {
                     try {
                         const dataWithoutLogo = { ...data, logoData: null };
                         setUserData('invoiceState', JSON.stringify(dataWithoutLogo));
+                        savedData = dataWithoutLogo;
                         state.logoData = null;
                         updateLogoPreview();
-                        showSaveIndicator('Saved (logo removed - storage full)', false);
-                    } catch (e2) {
+                        saved = true;
+                        showSaveIndicator('Saved locally (logo removed — storage full)', false);
+                    } catch {
                         showSaveIndicator('Save failed', false);
                     }
                 } else {
                     showSaveIndicator('Save failed', false);
                 }
             }
+            if (saved && options.history !== false) {
+                try {
+                    updateCurrentInvoiceHistory(savedData);
+                } catch (error) {
+                    console.warn('Invoice history could not be updated:', error);
+                }
+            }
+            if (saved && options.sync !== false) scheduleCloudSync();
         }
 
         function loadState() {
@@ -485,6 +505,27 @@
             setUserData('invoiceHistory', JSON.stringify(history));
             renderHistory();
             renderDashboardInvoices();
+            scheduleCloudSync();
+        }
+
+        function updateCurrentInvoiceHistory(data) {
+            if (!invoiceHasContent()) return false;
+            const history = getHistory();
+            const id = currentHistoryId || data.currentHistoryId;
+            if (!id) return false;
+            const existingIndex = history.findIndex((entry) => String(entry.id) === String(id));
+            const snapshot = { ...data };
+            delete snapshot.currentHistoryId;
+            delete snapshot.updatedAt;
+            const name = snapshot.invoiceName || `${snapshot.companyName || snapshot.clientName || 'Unnamed'} — ${snapshot.invNumber || 'Draft'}`;
+            const timestamp = Date.now();
+            if (existingIndex >= 0) {
+                history[existingIndex] = { ...history[existingIndex], name, timestamp, data: snapshot };
+            } else {
+                history.unshift({ id, name, timestamp, data: snapshot });
+            }
+            setHistory(history);
+            return true;
         }
 
         function invoiceHasContent() {
@@ -1633,8 +1674,8 @@
                 return false;
             }
 
-            // Flush the latest edits before creating the cloud snapshot.
-            saveState();
+            // Flush locally; this request itself performs the cloud sync.
+            saveState({ sync: false });
             const usernameValue = username.trim();
             const accessCodeValue = accessCode;
             const timestamp = new Date().toISOString();
@@ -1860,9 +1901,37 @@
 
         function mergeInvoiceHistories(remoteHistory, localHistory) {
             const byId = new Map();
-            remoteHistory.forEach((entry) => byId.set(String(entry.id), entry));
-            localHistory.forEach((entry) => byId.set(String(entry.id), entry));
+            [...remoteHistory, ...localHistory].forEach((entry) => {
+                const key = String(entry.id);
+                const existing = byId.get(key);
+                if (!existing || Number(entry.timestamp || 0) >= Number(existing.timestamp || 0)) byId.set(key, entry);
+            });
             return Array.from(byId.values()).sort((left, right) => Number(right.timestamp || 0) - Number(left.timestamp || 0));
+        }
+
+        function historySignature(history) {
+            return JSON.stringify(history
+                .map((entry) => [
+                    String(entry.id),
+                    Number(entry.timestamp || 0),
+                    String(entry.name || ''),
+                    JSON.stringify(entry.data || null),
+                ])
+                .sort((left, right) => left[0].localeCompare(right[0])));
+        }
+
+        function parseInvoiceState(value) {
+            try {
+                const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+                return parsed && typeof parsed === 'object' ? parsed : null;
+            } catch {
+                return null;
+            }
+        }
+
+        function invoiceStateTimestamp(value) {
+            const timestamp = Date.parse(value?.updatedAt || '');
+            return Number.isFinite(timestamp) ? timestamp : 0;
         }
 
         async function fetchInvoiceBackup(username) {
@@ -1874,6 +1943,98 @@
             });
             const rows = await supabaseRequest(`invoice_backups?${query.toString()}`);
             return Array.isArray(rows) ? rows[0] || null : null;
+        }
+
+        function scheduleCloudSync(delay = 900) {
+            if (!currentUser || !supabaseReady || !currentUser.accessCodeHash?.startsWith('pbkdf2-sha256$')) return;
+            const snapshot = {
+                username: currentUser.username,
+                verifier: currentUser.accessCodeHash,
+                data: {
+                    invoiceState: getUserData('invoiceState') || '{}',
+                    invoiceHistory: getUserData('invoiceHistory') || '[]',
+                },
+            };
+            clearTimeout(cloudSyncTimeout);
+            cloudSyncTimeout = setTimeout(() => {
+                cloudSyncTimeout = null;
+                syncCloudSnapshot(snapshot);
+            }, delay);
+        }
+
+        async function syncCloudSnapshot(snapshot) {
+            if (!snapshot) return false;
+            if (!navigator.onLine) {
+                if (currentUser?.username === snapshot.username) {
+                    setDashboardCloudStatus('Saved on this device · will sync when online.', 'error');
+                    showSaveIndicator('Saved offline · sync pending', false);
+                }
+                return false;
+            }
+            if (cloudSyncBusy) {
+                cloudSyncPending = snapshot;
+                return false;
+            }
+
+            cloudSyncBusy = true;
+            try {
+                const lookup = new URLSearchParams({
+                    select: 'username',
+                    username: `eq.${snapshot.username}`,
+                    limit: '1',
+                });
+                const records = await supabaseRequest(`invoice_backups?${lookup.toString()}`);
+                const timestamp = new Date().toISOString();
+                const existing = Array.isArray(records) && records.length > 0;
+                if (existing) {
+                    const filter = new URLSearchParams({
+                        username: `eq.${snapshot.username}`,
+                        select: 'username',
+                    });
+                    const updated = await supabaseRequest(`invoice_backups?${filter.toString()}`, {
+                        method: 'PATCH',
+                        body: {
+                            data: snapshot.data,
+                            access_code: snapshot.verifier,
+                            updated_at: timestamp,
+                        },
+                        headers: { Prefer: 'return=representation' },
+                    });
+                    if (!Array.isArray(updated) || updated.length === 0) {
+                        throw new Error('No cloud backup row was updated. Check Supabase table policies.');
+                    }
+                } else {
+                    await supabaseRequest('invoice_backups', {
+                        method: 'POST',
+                        body: {
+                            username: snapshot.username,
+                            access_code: snapshot.verifier,
+                            data: snapshot.data,
+                            updated_at: timestamp,
+                        },
+                        headers: { Prefer: 'return=representation' },
+                    });
+                }
+                if (currentUser?.username === snapshot.username) {
+                    setDashboardCloudStatus('All changes synced to your account.', 'success');
+                    showSaveIndicator('Synced', false);
+                }
+                return true;
+            } catch (error) {
+                console.warn('Automatic cloud save failed:', error);
+                if (currentUser?.username === snapshot.username) {
+                    setDashboardCloudStatus('Saved on this device · automatic cloud sync is pending.', 'error');
+                    showSaveIndicator('Saved locally · sync pending', false);
+                }
+                return false;
+            } finally {
+                cloudSyncBusy = false;
+                if (cloudSyncPending) {
+                    const pending = cloudSyncPending;
+                    cloudSyncPending = null;
+                    syncCloudSnapshot(pending);
+                }
+            }
         }
 
         function migrateLegacyLocalData() {
@@ -2045,7 +2206,8 @@
 
             clearTimeout(saveTimeout);
             resetInvoiceData(true);
-            const hadLocalState = Boolean(getUserData('invoiceState'));
+            const localStateText = getUserData('invoiceState');
+            const hadLocalState = Boolean(localStateText);
             if (!loadState()) resetInvoiceData(true);
 
             $('dashboardUsername').textContent = username;
@@ -2062,27 +2224,38 @@
                     const localHistory = getHistory();
                     const remoteHistory = parseHistoryValue(backup.invoiceHistory);
                     const mergedHistory = mergeInvoiceHistories(remoteHistory, localHistory);
-                    if (mergedHistory.length || localHistory.length) setUserData('invoiceHistory', JSON.stringify(mergedHistory));
-
-                    if (!hadLocalState && backup.invoiceState) {
-                        const cloudState = typeof backup.invoiceState === 'string'
-                            ? backup.invoiceState
-                            : JSON.stringify(backup.invoiceState);
-                        setUserData('invoiceState', cloudState);
-                        loadState();
+                    const historyNeedsSync = historySignature(mergedHistory) !== historySignature(remoteHistory);
+                    if (mergedHistory.length || localHistory.length) {
+                        setUserData('invoiceHistory', JSON.stringify(mergedHistory));
                     }
+
+                    let localState = parseInvoiceState(localStateText);
+                    const remoteState = parseInvoiceState(backup.invoiceState);
+                    const localTimestamp = invoiceStateTimestamp(localState);
+                    const remoteTimestamp = invoiceStateTimestamp(remoteState)
+                        || (Date.parse(cloudRecord.updated_at || '') || 0);
+                    const useCloudState = Boolean(remoteState && (!localState || remoteTimestamp >= localTimestamp));
+                    if (useCloudState) {
+                        setUserData('invoiceState', JSON.stringify(remoteState));
+                        loadState();
+                        localState = remoteState;
+                    }
+
                     renderHistory();
                     renderDashboardInvoices();
                     const date = cloudRecord.updated_at
                         ? new Date(cloudRecord.updated_at).toLocaleDateString('en-NG')
                         : 'recently';
-                    setDashboardCloudStatus(`Cloud backup loaded · ${date}`, 'success');
+                    setDashboardCloudStatus(useCloudState ? `Cloud changes loaded · ${date}` : `Cloud backup checked · ${date}`, 'success');
+                    if (historyNeedsSync || (localState && localTimestamp > remoteTimestamp)) scheduleCloudSync(150);
                 } else {
                     setDashboardCloudStatus('Cloud backup is ready. No remote invoices found yet.');
+                    if (hadLocalState || getHistory().length) scheduleCloudSync(150);
                 }
             } catch (error) {
                 console.warn('Could not load cloud invoices:', error);
                 setDashboardCloudStatus('Showing invoices saved on this device. Cloud backup could not be reached.', 'error');
+                if (hadLocalState || getHistory().length) scheduleCloudSync(150);
             }
         }
 
@@ -2147,9 +2320,9 @@
                 let sessionVerifier = storedVerifier;
                 if (verification.needsUpgrade) {
                     const upgradedVerifier = await createPasswordVerifier(password);
+                    sessionVerifier = upgradedVerifier;
                     try {
-                        const upgraded = await upgradeLegacyPassword(username, columns, upgradedVerifier);
-                        if (upgraded) sessionVerifier = upgradedVerifier;
+                        await upgradeLegacyPassword(username, columns, upgradedVerifier);
                     } catch (error) {
                         console.warn('Legacy password could not be upgraded:', error);
                     }
@@ -2239,7 +2412,7 @@
             $('saveInvoiceBtn').addEventListener('click', saveCurrentInvoice);
             $('resetInvoiceBtn').addEventListener('click', resetInvoice);
             $('logoutBtn').addEventListener('click', () => {
-                if (currentUser) saveState();
+                if (currentUser) saveState({ history: false });
                 clearAccountSession();
             });
             $('dashboardDownloadBackupBtn').addEventListener('click', downloadBackup);
@@ -2357,6 +2530,7 @@
                     navigator.onLine ? 'Cloud backup is available.' : 'Offline — your saved invoices are still available on this device.',
                     navigator.onLine ? '' : 'error'
                 );
+                if (navigator.onLine) scheduleCloudSync(150);
             }
         }
 
