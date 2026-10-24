@@ -2043,7 +2043,12 @@
         }
 
         .dashboard-restore-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
             min-height: 34px;
+            overflow: hidden;
+            flex-shrink: 0;
         }
 
         .dashboard-restore-wrap input[type="file"] {
