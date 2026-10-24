@@ -9,6 +9,7 @@ A minimalist, installable invoice and receipt generator for Nigerian naira (₦)
 - Add a logo and adjust its aspect, scale, and balance-box colour.
 - Preview, print, and download invoices as PDFs; mark invoices paid to create receipts.
 - Save invoices locally to history; edit, duplicate, rename, or delete them.
+- Switch between light and dark themes; the choice is remembered on this device, and mobile page zoom is disabled for a stable input experience.
 - Export and restore JSON backups, with optional Supabase cloud backup.
 - Install as a PWA on supported browsers. The app shell, icons, fonts, and PDF generator are cached for offline use.
 

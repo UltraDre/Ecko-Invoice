@@ -155,6 +155,7 @@
 
         const $ = (id) => document.getElementById(id);
         const AUTH_SESSION_KEY = 'eckoInvoiceSession';
+        const THEME_STORAGE_KEY = 'eckoInvoiceTheme';
         const USER_COLUMN_VARIANTS = [
             { username: 'Username', password: 'Access_Code' },
             { username: 'username', password: 'access_code' },
@@ -182,6 +183,49 @@
 
         function removeUserData(key) {
             localStorage.removeItem(userStorageKey(key));
+        }
+
+        function applyTheme(theme, persist = true) {
+            const dark = theme === 'dark';
+            document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+            document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+
+            const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+            document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+                const icon = button.querySelector('i');
+                if (icon) icon.className = dark ? 'fas fa-sun' : 'fas fa-moon';
+                button.setAttribute('aria-label', label);
+                button.setAttribute('title', label);
+                button.setAttribute('aria-pressed', String(dark));
+            });
+
+            const themeColor = document.querySelector('meta[name="theme-color"]');
+            if (themeColor) themeColor.content = dark ? '#0b1220' : '#1e293b';
+            const statusBarStyle = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+            if (statusBarStyle) statusBarStyle.content = dark ? 'black' : 'default';
+
+            if (persist) {
+                try {
+                    localStorage.setItem(THEME_STORAGE_KEY, dark ? 'dark' : 'light');
+                } catch {
+                    // Keep the selected theme for this page even when storage is unavailable.
+                }
+            }
+        }
+
+        function setupThemeToggle() {
+            let savedTheme = 'light';
+            try {
+                savedTheme = localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+            } catch {
+                // Use the light theme when browser storage is unavailable.
+            }
+            applyTheme(savedTheme, false);
+            document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+                });
+            });
         }
 
         const invoiceNameInput = $('invoiceName');
@@ -2582,6 +2626,7 @@
             due.setDate(due.getDate() + 30);
             if (!invDueDate.value) invDueDate.value = due.toISOString().split('T')[0];
 
+            setupThemeToggle();
             attachInputListeners();
             setupTabs();
             setupDownload();
