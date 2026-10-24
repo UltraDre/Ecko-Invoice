@@ -2,13 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
     <title>Ecko Invoice — ₦</title>
     <meta name="description" content="Create, customize, and save professional invoices and receipts in Nigerian naira — even offline." />
     <meta name="theme-color" content="#1e293b" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Ecko Invoice" />
+    <script>
+        try {
+            if (localStorage.getItem('eckoInvoiceTheme') === 'dark') {
+                document.documentElement.dataset.theme = 'dark';
+                document.documentElement.style.colorScheme = 'dark';
+                document.querySelector('meta[name="theme-color"]').content = '#0b1220';
+                document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content = 'black';
+            }
+        } catch {
+            // Theme will default to light if browser storage is unavailable.
+        }
+    </script>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
@@ -22,9 +34,14 @@
 
     <main class="auth-view" id="authView" aria-labelledby="authHeading">
         <section class="auth-card">
-            <div class="auth-brand">
-                <span class="auth-brand-mark"><i class="fas fa-file-invoice" aria-hidden="true"></i></span>
-                <span>Ecko Invoice</span><span class="auth-currency">₦</span>
+            <div class="auth-card-header">
+                <div class="auth-brand">
+                    <span class="auth-brand-mark"><i class="fas fa-file-invoice" aria-hidden="true"></i></span>
+                    <span>Ecko Invoice</span><span class="auth-currency">₦</span>
+                </div>
+                <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark mode" aria-pressed="false" title="Switch to dark mode">
+                    <i class="fas fa-moon" aria-hidden="true"></i>
+                </button>
             </div>
             <div class="auth-intro">
                 <p class="auth-eyebrow">YOUR INVOICE WORKSPACE</p>
@@ -61,6 +78,9 @@
                 <span>Ecko Invoice</span><span class="dashboard-currency">₦</span>
             </div>
             <div class="dashboard-user">
+                <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark mode" aria-pressed="false" title="Switch to dark mode">
+                    <i class="fas fa-moon" aria-hidden="true"></i>
+                </button>
                 <button class="btn-small dashboard-install" id="installAppBtn" type="button" hidden title="Install Ecko Invoice"><i class="fas fa-download fa-icon" aria-hidden="true"></i> Install</button>
                 <span class="dashboard-user-name"><i class="fas fa-user-circle" aria-hidden="true"></i> <span id="dashboardUsername"></span></span>
                 <button class="btn-small" id="logoutBtn" type="button"><i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i> Sign out</button>
@@ -104,6 +124,9 @@
                 <span class="save-indicator" id="saveIndicator" role="status" aria-live="polite">
                     <span class="dot"></span> <span id="saveText">Saved</span>
                 </span>
+                <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark mode" aria-pressed="false" title="Switch to dark mode">
+                    <i class="fas fa-moon" aria-hidden="true"></i>
+                </button>
                 <button class="btn-secondary" id="backToInvoicesBtn" type="button" title="Back to saved invoices">
                     <i class="fas fa-arrow-left fa-icon" aria-hidden="true"></i> Invoices
                 </button>
