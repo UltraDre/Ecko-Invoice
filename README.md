@@ -24,9 +24,11 @@ Then open `http://localhost:4173`. For production, deploy the folder to any stat
 
 ## Data and cloud backup
 
-Invoices and history are stored in this browser's local storage. Use **Backup → Download Backup** regularly if you need an extra copy; restoring a JSON backup replaces the current local data.
+Sign-up and login use the existing Supabase `users` table with `Username` and `Access_Code` text columns (lowercase `username` / `access_code` is also recognized). New passwords are stored as salted PBKDF2-SHA-256 verifiers in `Access_Code`; a legacy plain-text value is upgraded after a successful login when the table permits updates. Usernames scope each account's local invoice data. Use **Download backup** regularly; restoring a JSON backup replaces that account's local data.
 
-Cloud backup uses the Supabase project configured near the top of `app.js` and expects an `invoice_backups` table with `username`, `access_code`, `data`, and `updated_at` columns. Review and configure Supabase Row Level Security for your own project before enabling it. The browser-side access code is only a basic write guard, not encryption, and a publishable key must never be treated as a secret. Cloud upload and restore need an internet connection; local invoices, history, printing, and PDF downloads continue to work offline.
+Cloud invoice backup uses the Supabase project configured near the top of `app.js` and expects an `invoice_backups` table with `username`, `access_code`, `data`, and `updated_at` columns. New cloud backups store the account's PBKDF2 verifier in `access_code`; legacy plain access codes are upgraded when the account owner syncs successfully. Sign-up/login and cloud sync need an internet connection; local invoices, history, printing, and PDF downloads remain available offline during a saved session.
+
+**Security:** This is a static browser app using a publishable Supabase key. Client-side password hashing protects against storing new passwords in plain text, but it is not a substitute for server-side authentication. Configure strict Row Level Security and do not expose unrestricted `SELECT` access to `users`; for sensitive production data, move credential verification and authorization into a server-side RPC/Edge Function or Supabase Auth. A publishable key must never be treated as a secret.
 
 ## PWA notes
 

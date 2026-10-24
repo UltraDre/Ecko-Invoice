@@ -47,6 +47,95 @@
             return `${action} failed. Check your connection and Supabase table permissions.`;
         }
 
+        function isMissingUserColumn(error) {
+            return error?.code === '42703' || error?.code === 'PGRST204' || error?.status === 400;
+        }
+
+        async function findUserRecord(username) {
+            if (!supabaseReady) throw new Error('Authentication is not configured.');
+            let lastSchemaError = null;
+            for (const columns of USER_COLUMN_VARIANTS) {
+                const query = new URLSearchParams({
+                    select: `${columns.username},${columns.password}`,
+                    [columns.username]: `eq.${username}`,
+                    limit: '1',
+                });
+                try {
+                    const rows = await supabaseRequest(`users?${query.toString()}`);
+                    return { columns, record: Array.isArray(rows) ? rows[0] || null : null };
+                } catch (error) {
+                    if (!isMissingUserColumn(error)) throw error;
+                    lastSchemaError = error;
+                }
+            }
+            throw lastSchemaError || new Error('Could not read the users table.');
+        }
+
+        function bytesToHex(bytes) {
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+
+        function hexToBytes(hex) {
+            if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) throw new Error('Invalid password verifier.');
+            return new Uint8Array(hex.match(/.{2}/g).map((byte) => parseInt(byte, 16)));
+        }
+
+        async function derivePasswordHash(password, salt, iterations) {
+            if (!window.crypto?.subtle) throw new Error('Secure password hashing requires HTTPS or localhost.');
+            const material = await window.crypto.subtle.importKey(
+                'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']
+            );
+            const bits = await window.crypto.subtle.deriveBits({
+                name: 'PBKDF2',
+                hash: 'SHA-256',
+                salt,
+                iterations,
+            }, material, 256);
+            return bytesToHex(new Uint8Array(bits));
+        }
+
+        async function createPasswordVerifier(password) {
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            const saltHex = bytesToHex(salt);
+            const hash = await derivePasswordHash(password, salt, PASSWORD_HASH_ITERATIONS);
+            return `pbkdf2-sha256$${PASSWORD_HASH_ITERATIONS}$${saltHex}$${hash}`;
+        }
+
+        function constantTimeHexEqual(left, right) {
+            if (left.length !== right.length) return false;
+            let difference = 0;
+            for (let index = 0; index < left.length; index += 1) {
+                difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+            }
+            return difference === 0;
+        }
+
+        async function verifyPassword(password, storedVerifier) {
+            if (typeof storedVerifier !== 'string') return { valid: false, needsUpgrade: false };
+            if (!storedVerifier.startsWith('pbkdf2-sha256$')) {
+                return { valid: password === storedVerifier, needsUpgrade: true };
+            }
+            const [, iterationsText, saltHex, expectedHash] = storedVerifier.split('$');
+            const iterations = Number(iterationsText);
+            if (!Number.isInteger(iterations) || iterations < 100000 || iterations > 1000000 || !saltHex || !expectedHash) {
+                return { valid: false, needsUpgrade: false };
+            }
+            const actualHash = await derivePasswordHash(password, hexToBytes(saltHex), iterations);
+            return { valid: constantTimeHexEqual(actualHash, expectedHash), needsUpgrade: false };
+        }
+
+        function authErrorMessage(error) {
+            if (error?.code === '42P01') return 'The Supabase users table could not be found.';
+            if (error?.code === '42501' || error?.status === 401 || error?.status === 403) {
+                return 'Supabase denied access. Check the users table Row Level Security policies.';
+            }
+            if (error?.code === '23505') return 'That username is already taken.';
+            if (isMissingUserColumn(error)) {
+                return 'Could not read the users table. It must expose Username and Access_Code (or lowercase equivalents).';
+            }
+            return error?.message || 'Could not reach the account service. Check your connection and try again.';
+        }
+
         // ─── state ─────────────────────────────────────────────
         const state = {
             items: [],
@@ -65,6 +154,35 @@
         };
 
         const $ = (id) => document.getElementById(id);
+        const AUTH_SESSION_KEY = 'eckoInvoiceSession';
+        const USER_COLUMN_VARIANTS = [
+            { username: 'Username', password: 'Access_Code' },
+            { username: 'username', password: 'access_code' },
+        ];
+        const PASSWORD_HASH_ITERATIONS = 310000;
+        let currentUser = null;
+        let currentHistoryId = null;
+        let authMode = 'login';
+
+        function accountStorageKey(username, key) {
+            return `eckoInvoice:${encodeURIComponent(username)}:${key}`;
+        }
+
+        function userStorageKey(key) {
+            return currentUser ? accountStorageKey(currentUser.username, key) : key;
+        }
+
+        function getUserData(key) {
+            return localStorage.getItem(userStorageKey(key));
+        }
+
+        function setUserData(key, value) {
+            localStorage.setItem(userStorageKey(key), value);
+        }
+
+        function removeUserData(key) {
+            localStorage.removeItem(userStorageKey(key));
+        }
 
         const invoiceNameInput = $('invoiceName');
         const companyName = $('companyName');
@@ -254,15 +372,16 @@
                 isPaid: state.isPaid,
                 paidDate: state.paidDate,
                 prevAmountPaid: state.prevAmountPaid,
+                currentHistoryId,
             };
             try {
-                localStorage.setItem('invoiceState', JSON.stringify(data));
+                setUserData('invoiceState', JSON.stringify(data));
                 showSaveIndicator('Saved', false);
             } catch (e) {
                 if (e.name === 'QuotaExceededError' || e.code === 22) {
                     try {
                         const dataWithoutLogo = { ...data, logoData: null };
-                        localStorage.setItem('invoiceState', JSON.stringify(dataWithoutLogo));
+                        setUserData('invoiceState', JSON.stringify(dataWithoutLogo));
                         state.logoData = null;
                         updateLogoPreview();
                         showSaveIndicator('Saved (logo removed - storage full)', false);
@@ -277,7 +396,7 @@
 
         function loadState() {
             try {
-                const raw = localStorage.getItem('invoiceState');
+                const raw = getUserData('invoiceState');
                 if (!raw) return false;
                 const data = JSON.parse(raw);
 
@@ -307,6 +426,7 @@
                 state.isPaid = !!data.isPaid;
                 state.paidDate = data.paidDate || null;
                 state.prevAmountPaid = (data.prevAmountPaid === undefined) ? null : data.prevAmountPaid;
+                currentHistoryId = data.currentHistoryId || null;
 
                 logoAspect.value = state.logoAspect;
                 logoScale.value = state.logoScale;
@@ -351,7 +471,7 @@
 
         function getHistory() {
             try {
-                const raw = localStorage.getItem('invoiceHistory');
+                const raw = getUserData('invoiceHistory');
                 const history = raw ? JSON.parse(raw) : [];
                 return Array.isArray(history)
                     ? history.filter((entry) => entry && typeof entry === 'object' && entry.id !== undefined && entry.data && typeof entry.data === 'object')
@@ -362,20 +482,28 @@
         }
 
         function setHistory(history) {
-            localStorage.setItem('invoiceHistory', JSON.stringify(history));
+            setUserData('invoiceHistory', JSON.stringify(history));
             renderHistory();
+            renderDashboardInvoices();
+        }
+
+        function invoiceHasContent() {
+            return Boolean(
+                invoiceNameInput.value.trim() || companyName.value.trim() || clientName.value.trim() ||
+                invNumber.value.trim() || notes.value.trim() ||
+                state.items.some((item) => item.description.trim() || (item.qty > 0 && item.rate > 0))
+            );
         }
 
         function saveToHistory() {
-            const data = collectData();
-            const hasContent = state.items.length > 0 || data.company.name || data.client.name;
-            if (!hasContent) {
+            if (!invoiceHasContent()) {
                 showToast('Nothing to save — invoice is empty.', 'info');
                 return false;
             }
 
+            const data = collectData();
             const history = getHistory();
-            const name = data.invoice.name || (data.company.name || 'Unnamed') + ' — ' + (data.invoice.number || 'Draft');
+            const name = data.invoice.name || (data.company.name || data.client.name || 'Unnamed') + ' — ' + (data.invoice.number || 'Draft');
 
             const snapshot = {
                 invoiceName: invoiceNameInput.value,
@@ -405,15 +533,30 @@
                 prevAmountPaid: state.prevAmountPaid,
             };
 
-            history.unshift({
-                id: 'hist_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-                name: name,
-                timestamp: Date.now(),
-                data: snapshot,
-            });
+            const timestamp = Date.now();
+            const existingIndex = currentHistoryId
+                ? history.findIndex((entry) => String(entry.id) === String(currentHistoryId))
+                : -1;
+            if (existingIndex >= 0) {
+                history[existingIndex] = {
+                    ...history[existingIndex],
+                    name,
+                    timestamp,
+                    data: snapshot,
+                };
+            } else {
+                currentHistoryId = 'hist_' + timestamp + '_' + Math.random().toString(36).slice(2, 6);
+                history.unshift({
+                    id: currentHistoryId,
+                    name,
+                    timestamp,
+                    data: snapshot,
+                });
+            }
 
             setHistory(history);
-            showToast('Invoice saved to history ✓', 'success');
+            saveState();
+            showToast('Invoice saved ✓', 'success');
             return true;
         }
 
@@ -426,6 +569,7 @@
             }
 
             const d = entry.data;
+            currentHistoryId = entry.id;
 
             invoiceNameInput.value = d.invoiceName || '';
             companyName.value = d.companyName || '';
@@ -466,6 +610,7 @@
             renderPreview();
             debounceSave();
 
+            showEditorView();
             switchTab('edit-tab');
             showToast('Invoice loaded for editing ✓', 'success');
         }
@@ -524,12 +669,14 @@
             if (!confirm('Delete this invoice from history?')) return;
             let history = getHistory();
             history = history.filter(h => String(h.id) !== String(id));
+            if (String(currentHistoryId) === String(id)) currentHistoryId = null;
             setHistory(history);
             showToast('Invoice deleted.', 'info');
         }
 
         function clearAllHistory() {
             if (!confirm('Delete all invoices from history?')) return;
+            currentHistoryId = null;
             setHistory([]);
             showToast('All history cleared.', 'info');
         }
@@ -1243,7 +1390,7 @@
         // ─── tabs ─────────────────────────────────────────────
 
         function switchTab(tabId) {
-            const tabs = document.querySelectorAll('.tab-btn');
+            const tabs = document.querySelectorAll('.tab-btn:not([hidden])');
             const contents = {
                 'edit-tab': document.getElementById('edit-tab'),
                 'preview-tab': document.getElementById('preview-tab'),
@@ -1266,7 +1413,7 @@
         }
 
         function setupTabs() {
-            const tabs = document.querySelectorAll('.tab-btn');
+            const tabs = document.querySelectorAll('.tab-btn:not([hidden])');
             tabs.forEach((button, index) => {
                 button.addEventListener('click', () => {
                     switchTab(button.dataset.tab);
@@ -1289,12 +1436,7 @@
         // ─── plus / reset ──────────────────────────────────────
 
         function handlePlus() {
-            const hasContent = state.items.length > 0 ||
-                companyName.value.trim() ||
-                clientName.value.trim() ||
-                invNumber.value.trim();
-
-            if (hasContent) {
+            if (invoiceHasContent()) {
                 const saved = saveToHistory();
                 if (!saved) return;
             } else {
@@ -1307,6 +1449,7 @@
         }
 
         function resetInvoiceData(silent = false) {
+            currentHistoryId = null;
             state.items = [];
             state.nextId = 1;
             state.logoData = null;
@@ -1342,7 +1485,7 @@
             amountPaid.value = 0;
             notes.value = '';
 
-            addItem('', 1, 0);
+            state.items.push({ id: state.nextId++, description: '', qty: 1, rate: 0 });
             updateLogoPreview();
             renderItems();
             updateSummary();
@@ -1352,7 +1495,7 @@
         }
 
         function resetInvoice() {
-            if (!confirm('Reset all invoice data? Unsaved changes will be lost.')) return;
+            if (!confirm('Reset this invoice draft? The saved invoice in your list will remain unchanged.')) return;
             resetInvoiceData(false);
             showToast('Invoice reset.', 'info');
         }
@@ -1362,8 +1505,8 @@
 
         function downloadBackup() {
             const data = {
-                invoiceState: localStorage.getItem('invoiceState'),
-                invoiceHistory: localStorage.getItem('invoiceHistory'),
+                invoiceState: getUserData('invoiceState'),
+                invoiceHistory: getUserData('invoiceHistory'),
                 version: '1.0',
                 exportedAt: new Date().toISOString(),
             };
@@ -1385,8 +1528,8 @@
             reader.onload = (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
-                    if (data.invoiceState) localStorage.setItem('invoiceState', data.invoiceState);
-                    if (data.invoiceHistory) localStorage.setItem('invoiceHistory', data.invoiceHistory);
+                    if (data.invoiceState) setUserData('invoiceState', data.invoiceState);
+                    if (data.invoiceHistory) setUserData('invoiceHistory', data.invoiceHistory);
                     showToast('Backup restored ✓ Reloading...', 'success');
                     setTimeout(() => location.reload(), 1200);
                 } catch (err) {
@@ -1425,7 +1568,7 @@
                 accessGroup.style.display = 'none';
             }
 
-            $('cloudUsernameInput').value = '';
+            $('cloudUsernameInput').value = currentUser?.username || '';
             $('cloudAccessCodeInput').value = '';
             modal.classList.add('active');
             setTimeout(() => $('cloudUsernameInput').focus(), 100);
@@ -1477,8 +1620,12 @@
                 setCloudModalStatus('Please enter a username.', 'error');
                 return false;
             }
-            if (!accessCode.trim()) {
-                setCloudModalStatus('Please enter your access code.', 'error');
+            if (!accessCode) {
+                setCloudModalStatus('Please enter your account password.', 'error');
+                return false;
+            }
+            if (currentUser && username.trim() !== currentUser.username) {
+                setCloudModalStatus('Use the username for the signed-in account.', 'error');
                 return false;
             }
             if (!navigator.onLine) {
@@ -1489,15 +1636,36 @@
             // Flush the latest edits before creating the cloud snapshot.
             saveState();
             const usernameValue = username.trim();
-            const accessCodeValue = accessCode.trim();
+            const accessCodeValue = accessCode;
             const timestamp = new Date().toISOString();
             const backup = {
-                invoiceState: localStorage.getItem('invoiceState') || '{}',
-                invoiceHistory: localStorage.getItem('invoiceHistory') || '[]',
+                invoiceState: getUserData('invoiceState') || '{}',
+                invoiceHistory: getUserData('invoiceHistory') || '[]',
             };
             setCloudModalStatus('Uploading to cloud…', 'info');
 
             try {
+                let cloudVerifier = accessCodeValue;
+                if (currentUser) {
+                    const verification = await verifyPassword(accessCodeValue, currentUser.accessCodeHash);
+                    if (!verification.valid) {
+                        setCloudModalStatus('Password does not match the signed-in account.', 'error');
+                        return false;
+                    }
+                    if (currentUser.accessCodeHash.startsWith('pbkdf2-sha256$')) {
+                        cloudVerifier = currentUser.accessCodeHash;
+                    } else {
+                        cloudVerifier = await createPasswordVerifier(accessCodeValue);
+                        currentUser.accessCodeHash = cloudVerifier;
+                        storeAccountSession(currentUser.username, cloudVerifier, currentUser.columns);
+                        try {
+                            await upgradeLegacyPassword(usernameValue, currentUser.columns, cloudVerifier);
+                        } catch (error) {
+                            console.warn('Legacy account password could not be upgraded during cloud sync:', error);
+                        }
+                    }
+                }
+
                 const lookup = new URLSearchParams({
                     select: 'username,access_code',
                     username: `eq.${usernameValue}`,
@@ -1506,14 +1674,14 @@
                 const records = await supabaseRequest(`invoice_backups?${lookup.toString()}`);
                 const existing = Array.isArray(records) ? records[0] : null;
 
-                if (existing && existing.access_code !== accessCodeValue) {
-                    setCloudModalStatus('Access code does not match this username.', 'error');
+                if (existing && existing.access_code !== cloudVerifier && existing.access_code !== accessCodeValue) {
+                    setCloudModalStatus('Password / access code does not match this backup.', 'error');
                     return false;
                 }
 
                 const values = {
                     username: usernameValue,
-                    access_code: accessCodeValue,
+                    access_code: cloudVerifier,
                     data: backup,
                     updated_at: timestamp,
                 };
@@ -1524,7 +1692,7 @@
                     });
                     const updated = await supabaseRequest(`invoice_backups?${updateQuery.toString()}`, {
                         method: 'PATCH',
-                        body: { data: backup, updated_at: timestamp },
+                        body: { data: backup, updated_at: timestamp, access_code: cloudVerifier },
                         headers: { Prefer: 'return=representation' },
                     });
                     if (!Array.isArray(updated) || updated.length === 0) {
@@ -1560,6 +1728,10 @@
                 setCloudModalStatus('Please enter a username.', 'error');
                 return false;
             }
+            if (currentUser && username.trim() !== currentUser.username) {
+                setCloudModalStatus('Use the username for the signed-in account.', 'error');
+                return false;
+            }
             if (!navigator.onLine) {
                 setCloudModalStatus('You are offline. Reconnect to load a cloud backup.', 'error');
                 return false;
@@ -1581,8 +1753,8 @@
                 }
 
                 const backup = record.data || {};
-                if (backup.invoiceState) localStorage.setItem('invoiceState', backup.invoiceState);
-                if (backup.invoiceHistory) localStorage.setItem('invoiceHistory', backup.invoiceHistory);
+                if (backup.invoiceState) setUserData('invoiceState', backup.invoiceState);
+                if (backup.invoiceHistory) setUserData('invoiceHistory', backup.invoiceHistory);
 
                 const date = record.updated_at ? new Date(record.updated_at).toLocaleString() : 'unknown date';
                 setCloudModalStatus(`Backup loaded successfully (updated ${date}).`, 'success');
@@ -1673,6 +1845,412 @@
                 }
                 openCloudModal('load');
             });
+        }
+
+        function parseHistoryValue(value) {
+            try {
+                const entries = typeof value === 'string' ? JSON.parse(value) : value;
+                return Array.isArray(entries)
+                    ? entries.filter((entry) => entry && typeof entry === 'object' && entry.id !== undefined && entry.data && typeof entry.data === 'object')
+                    : [];
+            } catch {
+                return [];
+            }
+        }
+
+        function mergeInvoiceHistories(remoteHistory, localHistory) {
+            const byId = new Map();
+            remoteHistory.forEach((entry) => byId.set(String(entry.id), entry));
+            localHistory.forEach((entry) => byId.set(String(entry.id), entry));
+            return Array.from(byId.values()).sort((left, right) => Number(right.timestamp || 0) - Number(left.timestamp || 0));
+        }
+
+        async function fetchInvoiceBackup(username) {
+            const query = new URLSearchParams({
+                select: 'data,updated_at',
+                username: `eq.${username}`,
+                order: 'updated_at.desc',
+                limit: '1',
+            });
+            const rows = await supabaseRequest(`invoice_backups?${query.toString()}`);
+            return Array.isArray(rows) ? rows[0] || null : null;
+        }
+
+        function migrateLegacyLocalData() {
+            if (!currentUser) return;
+            ['invoiceState', 'invoiceHistory'].forEach((key) => {
+                const scopedValue = localStorage.getItem(userStorageKey(key));
+                const legacyValue = localStorage.getItem(key);
+                if (scopedValue === null && legacyValue !== null) setUserData(key, legacyValue);
+                localStorage.removeItem(key);
+            });
+        }
+
+        function calculateHistoryTotal(data) {
+            const items = normalizeItems(data.items);
+            const subtotal = items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+            const taxRateValue = Number.parseFloat(data.taxRate) || 0;
+            const discountRateValue = Number.parseFloat(data.discountRate) || 0;
+            return subtotal + subtotal * taxRateValue / 100 - subtotal * discountRateValue / 100;
+        }
+
+        function renderDashboardInvoices() {
+            const list = $('dashboardInvoiceList');
+            if (!list) return;
+            const history = getHistory().slice().sort((left, right) => Number(right.timestamp || 0) - Number(left.timestamp || 0));
+            $('dashboardClearHistoryBtn').hidden = history.length === 0;
+            if (history.length === 0) {
+                list.innerHTML = `
+                    <div class="dashboard-empty">
+                        <span class="empty-icon"><i class="fas fa-file-circle-plus" aria-hidden="true"></i></span>
+                        <h2>No saved invoices yet</h2>
+                        <p>Create your first invoice and it will appear here.</p>
+                        <button type="button" class="btn-primary" id="dashboardEmptyNewBtn"><i class="fas fa-plus fa-icon" aria-hidden="true"></i> New invoice</button>
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = history.map((entry) => {
+                const data = entry.data || {};
+                const title = entry.name || data.invoiceName || data.companyName || 'Untitled invoice';
+                const client = data.clientName || 'No client added';
+                const number = data.invNumber ? `#${data.invNumber}` : 'Draft';
+                const timestamp = Number(entry.timestamp) || Date.now();
+                const date = new Date(timestamp).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
+                const paid = Boolean(data.isPaid);
+                const status = paid ? 'Paid' : 'Invoice';
+                const id = escapeHtml(String(entry.id));
+                return `
+                    <article class="invoice-card">
+                        <button type="button" class="invoice-card-open" data-invoice-id="${id}" aria-label="Open ${escapeHtml(title)}">
+                            <span class="invoice-card-top">
+                                <span class="invoice-card-icon"><i class="fas fa-file-invoice" aria-hidden="true"></i></span>
+                                <span class="invoice-card-status${paid ? ' paid' : ''}">${status}</span>
+                            </span>
+                            <span class="invoice-card-title">${escapeHtml(title)}</span>
+                            <span class="invoice-card-client">${escapeHtml(client)}</span>
+                            <span class="invoice-card-bottom">
+                                <span class="invoice-card-meta">${escapeHtml(number)} · ${escapeHtml(date)}</span>
+                                <span class="invoice-card-total">${formatMoney(calculateHistoryTotal(data))}</span>
+                            </span>
+                        </button>
+                        <div class="invoice-card-actions" aria-label="Invoice actions">
+                            <button type="button" class="invoice-card-action" data-action="duplicate" data-id="${id}"><i class="fas fa-copy" aria-hidden="true"></i> Duplicate</button>
+                            <button type="button" class="invoice-card-action" data-action="rename" data-id="${id}"><i class="fas fa-pencil" aria-hidden="true"></i> Rename</button>
+                            <button type="button" class="invoice-card-action delete" data-action="delete" data-id="${id}"><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+        }
+
+        function setAppView(view) {
+            $('authView').hidden = view !== 'auth';
+            $('dashboardView').hidden = view !== 'dashboard';
+            $('app').hidden = view !== 'editor';
+            if (view === 'auth') setTimeout(() => $('authUsername').focus(), 0);
+        }
+
+        function showEditorView() {
+            setAppView('editor');
+        }
+
+        function startNewInvoice() {
+            resetInvoiceData(false);
+            showEditorView();
+            switchTab('edit-tab');
+            invoiceNameInput.focus();
+        }
+
+        function returnToDashboard() {
+            if (invoiceHasContent()) saveToHistory();
+            else saveState();
+            renderDashboardInvoices();
+            setAppView('dashboard');
+        }
+
+        function saveCurrentInvoice() {
+            if (saveToHistory()) saveState();
+        }
+
+        function setDashboardCloudStatus(message, type = '') {
+            const status = $('dashboardCloudStatus');
+            status.textContent = message;
+            status.className = 'dashboard-cloud-status' + (type ? ` ${type}` : '');
+        }
+
+        function showAuthFeedback(message, type = '') {
+            const feedback = $('authFeedback');
+            feedback.textContent = message;
+            feedback.className = 'auth-feedback' + (type ? ` ${type}` : '');
+        }
+
+        function setAuthMode(mode) {
+            authMode = mode;
+            const signingUp = mode === 'signup';
+            $('loginModeBtn').classList.toggle('active', !signingUp);
+            $('signupModeBtn').classList.toggle('active', signingUp);
+            $('loginModeBtn').setAttribute('aria-selected', String(!signingUp));
+            $('signupModeBtn').setAttribute('aria-selected', String(signingUp));
+            $('authHeading').textContent = signingUp ? 'Create your account' : 'Welcome back';
+            $('authDescription').textContent = signingUp
+                ? 'Choose a username and password to create your invoice workspace.'
+                : 'Sign in to see and manage your saved invoices.';
+            $('authSubmitBtn').innerHTML = signingUp
+                ? '<i class="fas fa-user-plus fa-icon" aria-hidden="true"></i> Create account'
+                : '<i class="fas fa-arrow-right-to-bracket fa-icon" aria-hidden="true"></i> Log in';
+            $('authPassword').autocomplete = signingUp ? 'new-password' : 'current-password';
+            $('authPassword').minLength = signingUp ? 8 : 1;
+            $('passwordHint').hidden = !signingUp;
+            showAuthFeedback('');
+        }
+
+        function storeAccountSession(username, verifier, columns) {
+            if (typeof verifier !== 'string' || !verifier.startsWith('pbkdf2-sha256$')) {
+                sessionStorage.removeItem(AUTH_SESSION_KEY);
+                return;
+            }
+            sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ username, verifier, columns }));
+        }
+
+        function clearAccountSession() {
+            sessionStorage.removeItem(AUTH_SESSION_KEY);
+            currentUser = null;
+            currentHistoryId = null;
+            clearTimeout(saveTimeout);
+            resetInvoiceData(true);
+            setAppView('auth');
+            $('authUsername').value = '';
+            $('authPassword').value = '';
+            setAuthMode('login');
+        }
+
+        async function upgradeLegacyPassword(username, columns, newVerifier) {
+            const filters = new URLSearchParams({
+                [columns.username]: `eq.${username}`,
+            });
+            const updated = await supabaseRequest(`users?${filters.toString()}`, {
+                method: 'PATCH',
+                body: { [columns.password]: newVerifier },
+                headers: { Prefer: 'return=representation' },
+            });
+            return Array.isArray(updated) && updated.length > 0;
+        }
+
+        async function enterAccount(username, verifier, columns, options = {}) {
+            currentUser = { username, accessCodeHash: verifier, columns };
+            if (options.persistSession !== false) storeAccountSession(username, verifier, columns);
+            migrateLegacyLocalData();
+
+            clearTimeout(saveTimeout);
+            resetInvoiceData(true);
+            const hadLocalState = Boolean(getUserData('invoiceState'));
+            if (!loadState()) resetInvoiceData(true);
+
+            $('dashboardUsername').textContent = username;
+            setAppView('dashboard');
+            renderHistory();
+            renderDashboardInvoices();
+            setDashboardCloudStatus(navigator.onLine ? 'Checking cloud invoices…' : 'Offline — showing invoices saved on this device.');
+
+            if (options.skipCloud || !navigator.onLine || !supabaseReady) return;
+            try {
+                const cloudRecord = await fetchInvoiceBackup(username);
+                const backup = cloudRecord?.data;
+                if (backup && typeof backup === 'object') {
+                    const localHistory = getHistory();
+                    const remoteHistory = parseHistoryValue(backup.invoiceHistory);
+                    const mergedHistory = mergeInvoiceHistories(remoteHistory, localHistory);
+                    if (mergedHistory.length || localHistory.length) setUserData('invoiceHistory', JSON.stringify(mergedHistory));
+
+                    if (!hadLocalState && backup.invoiceState) {
+                        const cloudState = typeof backup.invoiceState === 'string'
+                            ? backup.invoiceState
+                            : JSON.stringify(backup.invoiceState);
+                        setUserData('invoiceState', cloudState);
+                        loadState();
+                    }
+                    renderHistory();
+                    renderDashboardInvoices();
+                    const date = cloudRecord.updated_at
+                        ? new Date(cloudRecord.updated_at).toLocaleDateString('en-NG')
+                        : 'recently';
+                    setDashboardCloudStatus(`Cloud backup loaded · ${date}`, 'success');
+                } else {
+                    setDashboardCloudStatus('Cloud backup is ready. No remote invoices found yet.');
+                }
+            } catch (error) {
+                console.warn('Could not load cloud invoices:', error);
+                setDashboardCloudStatus('Showing invoices saved on this device. Cloud backup could not be reached.', 'error');
+            }
+        }
+
+        async function handleAuthSubmit(event) {
+            event.preventDefault();
+            const username = $('authUsername').value.trim();
+            const password = $('authPassword').value;
+            const usernamePattern = /^[A-Za-z0-9._-]{3,64}$/;
+            if (!usernamePattern.test(username)) {
+                showAuthFeedback('Use 3–64 letters, numbers, dots, dashes, or underscores for your username.', 'error');
+                return;
+            }
+            if (authMode === 'signup' && password.length < 8) {
+                showAuthFeedback('Choose a password with at least 8 characters.', 'error');
+                return;
+            }
+            if (!password) {
+                showAuthFeedback('Enter your password.', 'error');
+                return;
+            }
+            if (!navigator.onLine) {
+                showAuthFeedback('An internet connection is required to sign in or create an account.', 'error');
+                return;
+            }
+
+            const submitButton = $('authSubmitBtn');
+            const originalLabel = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.textContent = authMode === 'signup' ? 'Creating account…' : 'Signing in…';
+            showAuthFeedback('Connecting securely…');
+
+            try {
+                const { record, columns } = await findUserRecord(username);
+                if (authMode === 'signup') {
+                    if (record) {
+                        showAuthFeedback('That username is already taken. Try logging in instead.', 'error');
+                        return;
+                    }
+                    const verifier = await createPasswordVerifier(password);
+                    await supabaseRequest('users', {
+                        method: 'POST',
+                        body: { [columns.username]: username, [columns.password]: verifier },
+                        headers: { Prefer: 'return=minimal' },
+                    });
+                    $('authPassword').value = '';
+                    showAuthFeedback('Account created. Opening your invoice workspace…', 'success');
+                    await enterAccount(username, verifier, columns);
+                    return;
+                }
+
+                if (!record) {
+                    showAuthFeedback('Incorrect username or password.', 'error');
+                    return;
+                }
+                const storedVerifier = record[columns.password];
+                const verification = await verifyPassword(password, storedVerifier);
+                if (!verification.valid) {
+                    showAuthFeedback('Incorrect username or password.', 'error');
+                    return;
+                }
+
+                let sessionVerifier = storedVerifier;
+                if (verification.needsUpgrade) {
+                    const upgradedVerifier = await createPasswordVerifier(password);
+                    try {
+                        const upgraded = await upgradeLegacyPassword(username, columns, upgradedVerifier);
+                        if (upgraded) sessionVerifier = upgradedVerifier;
+                    } catch (error) {
+                        console.warn('Legacy password could not be upgraded:', error);
+                    }
+                }
+                $('authPassword').value = '';
+                showAuthFeedback('Signed in. Loading your invoices…', 'success');
+                await enterAccount(username, sessionVerifier, columns);
+            } catch (error) {
+                console.error('Account request failed:', error);
+                showAuthFeedback(authErrorMessage(error), 'error');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalLabel;
+            }
+        }
+
+        async function restoreAccountSession() {
+            let session;
+            try {
+                session = JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY) || 'null');
+            } catch {
+                sessionStorage.removeItem(AUTH_SESSION_KEY);
+                return false;
+            }
+            if (!session?.username || !session?.verifier?.startsWith('pbkdf2-sha256$')) return false;
+
+            if (!navigator.onLine) {
+                await enterAccount(session.username, session.verifier, session.columns, { persistSession: false, skipCloud: true });
+                return true;
+            }
+            try {
+                const { record, columns } = await findUserRecord(session.username);
+                if (!record || record[columns.password] !== session.verifier) {
+                    sessionStorage.removeItem(AUTH_SESSION_KEY);
+                    return false;
+                }
+                await enterAccount(session.username, session.verifier, columns, { persistSession: false });
+                return true;
+            } catch (error) {
+                console.warn('Could not validate the saved account session:', error);
+                const hasLocalWorkspace = localStorage.getItem(accountStorageKey(session.username, 'invoiceHistory'))
+                    || localStorage.getItem(accountStorageKey(session.username, 'invoiceState'));
+                if (hasLocalWorkspace) {
+                    await enterAccount(session.username, session.verifier, session.columns, { persistSession: false, skipCloud: true });
+                    setDashboardCloudStatus('Offline session · cloud updates are unavailable.', 'error');
+                    return true;
+                }
+                sessionStorage.removeItem(AUTH_SESSION_KEY);
+                return false;
+            }
+        }
+
+        function setupAuth() {
+            $('loginModeBtn').addEventListener('click', () => setAuthMode('login'));
+            $('signupModeBtn').addEventListener('click', () => setAuthMode('signup'));
+            $('authForm').addEventListener('submit', handleAuthSubmit);
+            $('authUsername').addEventListener('input', () => showAuthFeedback(''));
+            $('authPassword').addEventListener('input', () => showAuthFeedback(''));
+            setAuthMode('login');
+        }
+
+        function setupDashboard() {
+            $('dashboardInvoiceList').addEventListener('click', (event) => {
+                const newButton = event.target.closest('#dashboardEmptyNewBtn');
+                if (newButton) {
+                    startNewInvoice();
+                    return;
+                }
+                const actionButton = event.target.closest('[data-action]');
+                if (actionButton) {
+                    const { action, id } = actionButton.dataset;
+                    if (action === 'duplicate') duplicateHistory(id);
+                    else if (action === 'delete') deleteHistory(id);
+                    else if (action === 'rename') {
+                        const entry = getHistory().find((invoice) => String(invoice.id) === String(id));
+                        if (!entry) return;
+                        const name = prompt('Rename invoice', entry.name || '');
+                        if (name !== null) renameHistory(id, name);
+                    }
+                    return;
+                }
+                const invoiceButton = event.target.closest('[data-invoice-id]');
+                if (invoiceButton) loadFromHistory(invoiceButton.dataset.invoiceId);
+            });
+            $('newInvoiceBtn').addEventListener('click', startNewInvoice);
+            $('backToInvoicesBtn').addEventListener('click', returnToDashboard);
+            $('saveInvoiceBtn').addEventListener('click', saveCurrentInvoice);
+            $('resetInvoiceBtn').addEventListener('click', resetInvoice);
+            $('logoutBtn').addEventListener('click', () => {
+                if (currentUser) saveState();
+                clearAccountSession();
+            });
+            $('dashboardDownloadBackupBtn').addEventListener('click', downloadBackup);
+            $('dashboardRestoreBackupInput').addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) restoreBackup(file);
+                event.target.value = '';
+            });
+            $('dashboardCloudLoadBtn').addEventListener('click', () => openCloudModal('load'));
+            $('dashboardCloudUploadBtn').addEventListener('click', () => openCloudModal('upload'));
+            $('dashboardClearHistoryBtn').addEventListener('click', clearAllHistory);
         }
 
         // ─── attach input listeners ──────────────────────────
@@ -1774,6 +2352,12 @@
             } else {
                 updateCloudStatusBadge(false, 'Offline — local mode');
             }
+            if (currentUser) {
+                setDashboardCloudStatus(
+                    navigator.onLine ? 'Cloud backup is available.' : 'Offline — your saved invoices are still available on this device.',
+                    navigator.onLine ? '' : 'error'
+                );
+            }
         }
 
         function setupPwa() {
@@ -1824,27 +2408,24 @@
             due.setDate(due.getDate() + 30);
             if (!invDueDate.value) invDueDate.value = due.toISOString().split('T')[0];
 
-            const loaded = loadState();
-
-            if (!loaded) {
-                addItem('Web design service', 1, 450);
-                addItem('Consultation', 2, 120);
-                companyName.value = 'Studio Nine';
-                debounceSave();
-            }
-
             attachInputListeners();
             setupTabs();
             setupDownload();
             setupCloudModal();
             setupPwa();
+            setupAuth();
+            setupDashboard();
+            setAppView('auth');
             updatePaidButton();
-            renderHistory();
             renderPreview();
+            updateCloudConnectivity();
 
-            setTimeout(() => {
-                saveIndicator.classList.remove('visible');
-            }, 1000);
+            restoreAccountSession().then((restored) => {
+                if (!restored) setAppView('auth');
+            }).catch((error) => {
+                console.error('Could not restore account session:', error);
+                setAppView('auth');
+            });
         }
 
         // ─── expose globals ───────────────────────────────────

@@ -19,9 +19,82 @@
 </head>
 <body>
 
-    <div class="app" id="app">
 
-        <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <main class="auth-view" id="authView" aria-labelledby="authHeading">
+        <section class="auth-card">
+            <div class="auth-brand">
+                <span class="auth-brand-mark"><i class="fas fa-file-invoice" aria-hidden="true"></i></span>
+                <span>Ecko Invoice</span><span class="auth-currency">₦</span>
+            </div>
+            <div class="auth-intro">
+                <p class="auth-eyebrow">YOUR INVOICE WORKSPACE</p>
+                <h1 id="authHeading">Welcome back</h1>
+                <p id="authDescription">Sign in to see and manage your saved invoices.</p>
+            </div>
+            <div class="auth-mode-switch" role="tablist" aria-label="Account access">
+                <button class="auth-mode active" id="loginModeBtn" type="button" role="tab" aria-selected="true">Log in</button>
+                <button class="auth-mode" id="signupModeBtn" type="button" role="tab" aria-selected="false">Sign up</button>
+            </div>
+            <form id="authForm" novalidate>
+                <div class="form-group">
+                    <label for="authUsername">Username</label>
+                    <input type="text" id="authUsername" name="username" placeholder="Enter your username" autocomplete="username" autocapitalize="none" minlength="3" maxlength="64" pattern="[A-Za-z0-9._-]+" required />
+                </div>
+                <div class="form-group auth-password-group">
+                    <label for="authPassword">Password</label>
+                    <input type="password" id="authPassword" name="password" placeholder="Enter your password" autocomplete="current-password" minlength="1" maxlength="256" required />
+                    <span class="auth-password-hint" id="passwordHint" hidden>Use at least 8 characters.</span>
+                </div>
+                <p class="auth-feedback" id="authFeedback" role="status" aria-live="polite"></p>
+                <button class="btn-primary auth-submit" id="authSubmitBtn" type="submit">
+                    <i class="fas fa-arrow-right-to-bracket fa-icon" aria-hidden="true"></i> Log in
+                </button>
+            </form>
+            <p class="auth-footnote">Your invoices are saved to your workspace.</p>
+        </section>
+    </main>
+
+    <main class="dashboard-view" id="dashboardView" hidden aria-labelledby="dashboardHeading">
+        <header class="dashboard-header">
+            <div class="dashboard-brand">
+                <span class="dashboard-brand-mark"><i class="fas fa-file-invoice" aria-hidden="true"></i></span>
+                <span>Ecko Invoice</span><span class="dashboard-currency">₦</span>
+            </div>
+            <div class="dashboard-user">
+                <button class="btn-small dashboard-install" id="installAppBtn" type="button" hidden title="Install Ecko Invoice"><i class="fas fa-download fa-icon" aria-hidden="true"></i> Install</button>
+                <span class="dashboard-user-name"><i class="fas fa-user-circle" aria-hidden="true"></i> <span id="dashboardUsername"></span></span>
+                <button class="btn-small" id="logoutBtn" type="button"><i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i> Sign out</button>
+            </div>
+        </header>
+        <section class="dashboard-content">
+            <div class="dashboard-heading">
+                <div>
+                    <p class="dashboard-eyebrow">WORKSPACE</p>
+                    <h1 id="dashboardHeading">Your invoices</h1>
+                    <p class="dashboard-subtitle">Open a saved invoice to edit it or preview the finished document.</p>
+                </div>
+                <button class="btn-primary dashboard-new-btn" id="newInvoiceBtn" type="button">
+                    <i class="fas fa-plus fa-icon" aria-hidden="true"></i> New invoice
+                </button>
+            </div>
+            <div class="dashboard-tools" aria-label="Invoice backup tools">
+                <button class="btn-small" id="dashboardDownloadBackupBtn" type="button"><i class="fas fa-download fa-icon" aria-hidden="true"></i> Download backup</button>
+                <label class="file-input-wrap dashboard-restore-wrap">
+                    <span class="btn-small"><i class="fas fa-upload fa-icon" aria-hidden="true"></i> Restore backup</span>
+                    <input type="file" id="dashboardRestoreBackupInput" accept=".json,application/json" aria-label="Choose an invoice backup" />
+                </label>
+                <span class="dashboard-tools-spacer"></span>
+                <button class="btn-small" id="dashboardCloudLoadBtn" type="button"><i class="fas fa-cloud-download-alt fa-icon" aria-hidden="true"></i> Load cloud backup</button>
+                <button class="btn-small" id="dashboardCloudUploadBtn" type="button"><i class="fas fa-cloud-upload-alt fa-icon" aria-hidden="true"></i> Save to cloud</button>
+                <button class="btn-small dashboard-clear-history" id="dashboardClearHistoryBtn" type="button" hidden><i class="fas fa-trash fa-icon" aria-hidden="true"></i> Clear history</button>
+            </div>
+            <div class="dashboard-cloud-status" id="dashboardCloudStatus" role="status" aria-live="polite"></div>
+            <div class="dashboard-invoice-list" id="dashboardInvoiceList" aria-live="polite"></div>
+        </section>
+        <footer class="dashboard-footer">Invoices are stored per account on this device. Use cloud backup to access them on another device.</footer>
+    </main>
+
+    <div class="app" id="app" hidden>
 
         <header class="app-header">
             <h1>
@@ -31,14 +104,17 @@
                 <span class="save-indicator" id="saveIndicator" role="status" aria-live="polite">
                     <span class="dot"></span> <span id="saveText">Saved</span>
                 </span>
-                <button class="btn-secondary" id="installAppBtn" type="button" hidden title="Install Ecko Invoice">
-                    <i class="fas fa-download fa-icon" aria-hidden="true"></i> Install
+                <button class="btn-secondary" id="backToInvoicesBtn" type="button" title="Back to saved invoices">
+                    <i class="fas fa-arrow-left fa-icon" aria-hidden="true"></i> Invoices
                 </button>
-                <button class="btn-plus" id="plusBtn" type="button" aria-label="Save invoice and start a new one" title="Save current invoice to history and start fresh">
+                <button class="btn-primary" id="saveInvoiceBtn" type="button">
+                    <i class="fas fa-floppy-disk fa-icon" aria-hidden="true"></i> Save
+                </button>
+                <button class="btn-plus" id="plusBtn" type="button" aria-label="Save invoice and start a new one" title="Save current invoice and start a new one">
                     <i class="fas fa-plus"></i>
                 </button>
-                <button class="btn-secondary" onclick="resetInvoice()" style="padding:6px 16px;font-size:13px;">
-                    <i class="fas fa-rotate fa-icon"></i> Reset
+                <button class="btn-secondary" id="resetInvoiceBtn" type="button" style="padding:6px 16px;font-size:13px;">
+                    <i class="fas fa-rotate fa-icon" aria-hidden="true"></i> Reset
                 </button>
             </div>
         </header>
@@ -50,10 +126,10 @@
             <button class="tab-btn" data-tab="preview-tab" id="preview-tab-btn" role="tab" aria-controls="preview-tab" aria-selected="false" tabindex="-1">
                 <i class="fas fa-eye fa-icon"></i> Preview
             </button>
-            <button class="tab-btn" data-tab="history-tab" id="history-tab-btn" role="tab" aria-controls="history-tab" aria-selected="false" tabindex="-1">
+            <button class="tab-btn" hidden data-tab="history-tab" id="history-tab-btn" role="tab" aria-controls="history-tab" aria-selected="false" tabindex="-1">
                 <i class="fas fa-folder fa-icon"></i> History <span class="badge-tab" id="historyBadge">0</span>
             </button>
-            <button class="tab-btn" data-tab="backup-tab" id="backup-tab-btn" role="tab" aria-controls="backup-tab" aria-selected="false" tabindex="-1">
+            <button class="tab-btn" hidden data-tab="backup-tab" id="backup-tab-btn" role="tab" aria-controls="backup-tab" aria-selected="false" tabindex="-1">
                 <i class="fas fa-database fa-icon"></i> Backup
             </button>
         </div>
@@ -278,7 +354,7 @@
         </div>
 
         <!-- ========== HISTORY TAB ========== -->
-        <div class="tab-content" id="history-tab" role="tabpanel" aria-labelledby="history-tab-btn" tabindex="0">
+        <div class="tab-content" id="history-tab" hidden role="tabpanel" aria-labelledby="history-tab-btn" tabindex="0">
 
             <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                 <span style="font-size:14px;color:#64748b;"><i class="fas fa-folder-open fa-icon"></i> Saved invoices</span>
@@ -294,7 +370,7 @@
         </div>
 
         <!-- ========== BACKUP TAB ========== -->
-        <div class="tab-content" id="backup-tab" role="tabpanel" aria-labelledby="backup-tab-btn" tabindex="0">
+        <div class="tab-content" id="backup-tab" hidden role="tabpanel" aria-labelledby="backup-tab-btn" tabindex="0">
             <div class="backup-section">
 
                 <!-- Local Backup -->
@@ -349,6 +425,8 @@
 
     </div>
 
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
     <!-- ========== CLOUD MODAL ========== -->
     <div class="modal-overlay" id="cloudModal">
         <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cloudModalTitle" aria-describedby="cloudModalSub">
@@ -363,9 +441,9 @@
             </div>
 
             <div class="form-group" id="cloudAccessCodeGroup">
-                <label for="cloudAccessCodeInput"><i class="fas fa-key fa-icon"></i> Access Code</label>
-                <input type="password" id="cloudAccessCodeInput" placeholder="Your secret access code" autocomplete="current-password" />
-                <span style="font-size:11px;color:#94a3b8;margin-top:2px;">Required for uploads. Keep it safe — you'll need it to update.</span>
+                <label for="cloudAccessCodeInput"><i class="fas fa-key fa-icon"></i> Password / access code</label>
+                <input type="password" id="cloudAccessCodeInput" placeholder="Your account password" autocomplete="current-password" />
+                <span style="font-size:11px;color:#94a3b8;margin-top:2px;">Used to protect updates to this cloud backup.</span>
             </div>
 
             <div class="modal-status" id="cloudModalStatus"></div>
