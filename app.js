@@ -221,12 +221,15 @@
                 // Use the light theme when browser storage is unavailable.
             }
             applyTheme(savedTheme, false);
-            document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
-                button.addEventListener('click', () => {
-                    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
-                });
-            });
         }
+
+        // Delegate theme clicks immediately so the controls work even if app initialization is delayed.
+        document.addEventListener('click', (event) => {
+            const button = event.target.closest?.('[data-theme-toggle]');
+            if (!button) return;
+            event.preventDefault();
+            applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+        }, true);
 
         const invoiceNameInput = $('invoiceName');
         const companyName = $('companyName');
@@ -2659,4 +2662,8 @@
         window.resetInvoice = resetInvoice;
         window.togglePaid = togglePaid;
 
-        document.addEventListener('DOMContentLoaded', init);
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init, { once: true });
+        } else {
+            init();
+        }
