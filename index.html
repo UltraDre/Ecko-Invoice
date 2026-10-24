@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ecko Invoice — ₦</title>
+    <meta name="description" content="Create, customize, and save professional invoices and receipts in Nigerian naira — even offline." />
+    <meta name="theme-color" content="#1e293b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Ecko Invoice" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="stylesheet" href="./vendor/fontawesome/css/all.min.css" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./vendor/html2pdf/html2pdf.bundle.min.js" defer></script>
+    <script src="./app.js" defer></script>
+</head>
+<body>
+
+    <div class="app" id="app">
+
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+        <header class="app-header">
+            <h1>
+                <i class="fas fa-file-invoice fa-icon"></i> Invoice <span>₦</span>
+            </h1>
+            <div class="header-actions">
+                <span class="save-indicator" id="saveIndicator" role="status" aria-live="polite">
+                    <span class="dot"></span> <span id="saveText">Saved</span>
+                </span>
+                <button class="btn-secondary" id="installAppBtn" type="button" hidden title="Install Ecko Invoice">
+                    <i class="fas fa-download fa-icon" aria-hidden="true"></i> Install
+                </button>
+                <button class="btn-plus" id="plusBtn" type="button" aria-label="Save invoice and start a new one" title="Save current invoice to history and start fresh">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button class="btn-secondary" onclick="resetInvoice()" style="padding:6px 16px;font-size:13px;">
+                    <i class="fas fa-rotate fa-icon"></i> Reset
+                </button>
+            </div>
+        </header>
+
+        <div class="tabs" role="tablist">
+            <button class="tab-btn active" data-tab="edit-tab" id="edit-tab-btn" role="tab" aria-controls="edit-tab" aria-selected="true" tabindex="0">
+                <i class="fas fa-pen fa-icon"></i> Edit
+            </button>
+            <button class="tab-btn" data-tab="preview-tab" id="preview-tab-btn" role="tab" aria-controls="preview-tab" aria-selected="false" tabindex="-1">
+                <i class="fas fa-eye fa-icon"></i> Preview
+            </button>
+            <button class="tab-btn" data-tab="history-tab" id="history-tab-btn" role="tab" aria-controls="history-tab" aria-selected="false" tabindex="-1">
+                <i class="fas fa-folder fa-icon"></i> History <span class="badge-tab" id="historyBadge">0</span>
+            </button>
+            <button class="tab-btn" data-tab="backup-tab" id="backup-tab-btn" role="tab" aria-controls="backup-tab" aria-selected="false" tabindex="-1">
+                <i class="fas fa-database fa-icon"></i> Backup
+            </button>
+        </div>
+
+        <!-- ========== EDIT TAB ========== -->
+        <div class="tab-content active" id="edit-tab" role="tabpanel" aria-labelledby="edit-tab-btn" tabindex="0">
+
+            <div class="edit-grid">
+
+                <!-- Logo -->
+                <div class="full-width">
+                    <div class="section-title">
+                        <i class="fas fa-image fa-icon"></i> Logo <span class="badge">optional</span>
+                    </div>
+                    <div class="logo-section">
+                        <div class="logo-preview" id="logoPreview">
+                            <span class="placeholder"><i class="fas fa-image fa-icon"></i></span>
+                            <button class="remove-logo-overlay" id="removeLogoBtn" title="Remove logo">✕</button>
+                        </div>
+                        <div class="logo-actions">
+                            <div class="file-input-wrap">
+                                <button class="btn-small primary"><i class="fas fa-upload fa-icon"></i> Upload logo</button>
+                                <input type="file" id="logoUpload" accept="image/*" />
+                            </div>
+                            <span class="text-muted" style="font-size:12px;">PNG, JPG, SVG · max 200px</span>
+                        </div>
+                    </div>
+                    <div class="logo-options">
+                        <div class="form-group">
+                            <label for="logoAspect">Aspect ratio</label>
+                            <select id="logoAspect">
+                                <option value="original">Original</option>
+                                <option value="square">Square</option>
+                                <option value="circle">Circle</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="logoScale">Scale</label>
+                            <input type="range" id="logoScale" min="10" max="400" value="100" />
+                            <span id="logoScaleLabel">100%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Invoice Name -->
+                <div class="full-width">
+                    <div class="form-group">
+                        <label for="invoiceName"><i class="fas fa-tag fa-icon"></i> Invoice Name</label>
+                        <input type="text" id="invoiceName" placeholder="e.g. Q1 Project Report" inputmode="text" />
+                        <span class="text-muted" style="font-size:12px;">Used as the display name in history and backups</span>
+                    </div>
+                </div>
+
+                <!-- Company -->
+                <div class="form-group">
+                    <label for="companyName"><i class="fas fa-building fa-icon"></i> Company name</label>
+                    <input type="text" id="companyName" placeholder="Your company" inputmode="text" />
+                </div>
+                <div class="form-group">
+                    <label for="companyAddress"><i class="fas fa-location-dot fa-icon"></i> Address</label>
+                    <input type="text" id="companyAddress" placeholder="Street, city, postal" inputmode="text" />
+                </div>
+                <div class="form-group">
+                    <label for="companyEmail"><i class="fas fa-envelope fa-icon"></i> Email</label>
+                    <input type="email" id="companyEmail" placeholder="company@example.com" inputmode="email" />
+                </div>
+                <div class="form-group">
+                    <label for="companyPhone"><i class="fas fa-phone fa-icon"></i> Phone</label>
+                    <input type="text" id="companyPhone" placeholder="+234 800 000 0000" inputmode="tel" />
+                </div>
+
+                <!-- Invoice meta -->
+                <div class="form-group">
+                    <label for="invNumber"><i class="fas fa-hashtag fa-icon"></i> Invoice #</label>
+                    <input type="text" id="invNumber" placeholder="INV-001" inputmode="text" />
+                </div>
+                <div class="form-group">
+                    <label for="invDate"><i class="fas fa-calendar fa-icon"></i> Date</label>
+                    <input type="date" id="invDate" inputmode="text" />
+                </div>
+                <div class="form-group">
+                    <label for="invDueDate"><i class="fas fa-calendar-check fa-icon"></i> Due date</label>
+                    <input type="date" id="invDueDate" inputmode="text" />
+                </div>
+                <div class="form-group">
+                    <!-- placeholder -->
+                </div>
+
+                <!-- Client -->
+                <div class="full-width">
+                    <div class="section-title">
+                        <i class="fas fa-user fa-icon"></i> Client <span class="badge">bill to</span>
+                    </div>
+                    <div class="edit-grid" style="grid-template-columns:1fr 1fr;gap:16px 24px;margin-top:4px;">
+                        <div class="form-group">
+                            <label for="clientName"><i class="fas fa-user fa-icon"></i> Name</label>
+                            <input type="text" id="clientName" placeholder="Client name" inputmode="text" />
+                        </div>
+                        <div class="form-group">
+                            <label for="clientAddress"><i class="fas fa-location-dot fa-icon"></i> Address</label>
+                            <input type="text" id="clientAddress" placeholder="Street, city, postal" inputmode="text" />
+                        </div>
+                        <div class="form-group">
+                            <label for="clientEmail"><i class="fas fa-envelope fa-icon"></i> Email</label>
+                            <input type="email" id="clientEmail" placeholder="client@example.com" inputmode="email" />
+                        </div>
+                        <div class="form-group">
+                            <label for="clientPhone"><i class="fas fa-phone fa-icon"></i> Phone</label>
+                            <input type="text" id="clientPhone" placeholder="+234 800 000 0000" inputmode="tel" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Line Items -->
+                <div class="full-width">
+                    <div class="section-title">
+                        <i class="fas fa-list-ul fa-icon"></i> Line items <span class="badge" id="itemCount">0 items</span>
+                    </div>
+                    <div class="items-table-wrap">
+                        <table class="items-table" id="itemsTable">
+                            <thead>
+                                <tr>
+                                    <th class="col-desc">Description</th>
+                                    <th class="col-qty">Qty</th>
+                                    <th class="col-rate">Rate (₦)</th>
+                                    <th class="col-amount">Amount</th>
+                                    <th class="col-action"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="itemsBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <button class="btn-add-item" id="addItemBtn">
+                        <i class="fas fa-plus fa-icon"></i> Add line
+                    </button>
+                </div>
+
+                <!-- Summary -->
+                <div class="full-width">
+                    <div class="summary-row">
+                        <div class="summary-inputs">
+                            <div class="form-group">
+                                <label for="taxRate"><i class="fas fa-percent fa-icon"></i> Tax (%)</label>
+                                <input type="number" id="taxRate" value="0" min="0" step="0.5" inputmode="decimal" />
+                            </div>
+                            <div class="form-group">
+                                <label for="discountRate"><i class="fas fa-percent fa-icon"></i> Discount (%)</label>
+                                <input type="number" id="discountRate" value="0" min="0" step="0.5" inputmode="decimal" />
+                            </div>
+                            <div class="form-group">
+                                <label for="amountPaid"><i class="fas fa-money-bill-wave fa-icon"></i> Amount paid (₦)</label>
+                                <input type="number" id="amountPaid" value="0" min="0" step="0.5" inputmode="decimal" />
+                            </div>
+                            <div class="form-group">
+                                <label for="balanceBoxColor"><i class="fas fa-palette fa-icon"></i> Box color</label>
+                                <input type="color" id="balanceBoxColor" value="#000000" />
+                            </div>
+                        </div>
+                        <div class="summary-line">
+                            <span class="label">Subtotal</span>
+                            <span class="value" id="editSubtotal">₦0.00</span>
+                        </div>
+                        <div class="summary-line">
+                            <span class="label">Tax</span>
+                            <span class="value" id="editTax">₦0.00</span>
+                        </div>
+                        <div class="summary-line">
+                            <span class="label">Discount</span>
+                            <span class="value" id="editDiscount">₦0.00</span>
+                        </div>
+                        <div class="summary-line total">
+                            <span class="label">Total</span>
+                            <span class="value" id="editTotal">₦0.00</span>
+                        </div>
+                        <div class="summary-line total balance">
+                            <span class="label">Amount paid</span>
+                            <span class="value" id="editAmountPaid">₦0.00</span>
+                        </div>
+                        <div class="summary-line total balance" style="border-top-color:#1e293b;border-top-width:2px;font-size:19px;">
+                            <span class="label">Balance due</span>
+                            <span class="value" id="editBalance">₦0.00</span>
+                        </div>
+                        <div style="width:100%;display:flex;justify-content:flex-end;margin-top:10px;">
+                            <button class="btn-paid-toggle" id="paidToggleBtnEdit" type="button">
+                                <i class="fas fa-check-circle fa-icon"></i> Mark as paid
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                <div class="full-width">
+                    <div class="form-group">
+                        <label for="notes"><i class="fas fa-pencil fa-icon"></i> Notes / Terms</label>
+                        <textarea id="notes" rows="3" placeholder="Payment terms, thanks, etc." inputmode="text"></textarea>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ========== PREVIEW TAB ========== -->
+        <div class="tab-content" id="preview-tab" role="tabpanel" aria-labelledby="preview-tab-btn" tabindex="0">
+
+            <div class="preview-toolbar">
+                <button class="btn-paid-toggle" id="paidToggleBtnPreview" type="button">
+                    <i class="fas fa-check-circle fa-icon"></i> Mark as paid
+                </button>
+                <button class="btn-secondary" onclick="window.print()">
+                    <i class="fas fa-print fa-icon"></i> Print
+                </button>
+                <button class="btn-primary" id="downloadPdfBtn">
+                    <i class="fas fa-download fa-icon"></i> Download PDF
+                </button>
+            </div>
+
+            <div id="invoicePreviewContainer">
+                <!-- populated by JS -->
+            </div>
+
+        </div>
+
+        <!-- ========== HISTORY TAB ========== -->
+        <div class="tab-content" id="history-tab" role="tabpanel" aria-labelledby="history-tab-btn" tabindex="0">
+
+            <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                <span style="font-size:14px;color:#64748b;"><i class="fas fa-folder-open fa-icon"></i> Saved invoices</span>
+                <button class="btn-small" onclick="clearAllHistory()" style="color:#b91c1c;">
+                    <i class="fas fa-trash fa-icon"></i> Clear all
+                </button>
+            </div>
+
+            <div id="historyList" class="history-list">
+                <!-- populated by JS -->
+            </div>
+
+        </div>
+
+        <!-- ========== BACKUP TAB ========== -->
+        <div class="tab-content" id="backup-tab" role="tabpanel" aria-labelledby="backup-tab-btn" tabindex="0">
+            <div class="backup-section">
+
+                <!-- Local Backup -->
+                <div class="card">
+                    <h3><i class="fas fa-download fa-icon"></i> Download Backup</h3>
+                    <p>Export all invoices, history, and settings as a JSON file.</p>
+                    <button class="btn-primary" id="downloadBackupBtn">
+                        <i class="fas fa-download fa-icon"></i> Download Backup
+                    </button>
+                </div>
+
+                <!-- Local Restore -->
+                <div class="card">
+                    <h3><i class="fas fa-upload fa-icon"></i> Restore Backup</h3>
+                    <p>Upload a JSON backup file to restore all data. This will overwrite current data.</p>
+                    <div class="file-input-wrap">
+                        <button class="btn-secondary">
+                            <i class="fas fa-folder-open fa-icon"></i> Choose Backup File
+                        </button>
+                        <input type="file" id="restoreBackupInput" accept=".json" />
+                    </div>
+                </div>
+
+                <!-- Cloud Backup (NEW) -->
+                <div class="card" style="border-color:#1e293b;border-width:2px;">
+                    <h3><i class="fas fa-cloud fa-icon" style="color:#1e293b;"></i> Cloud Backup <span style="font-size:12px;font-weight:400;color:#64748b;margin-left:6px;">via Supabase</span></h3>
+                    <p>Store your invoices securely in the cloud. <strong>Upload</strong> saves your current data with a username &amp; access code. <strong>Load</strong> restores from any username.</p>
+
+                    <div class="cloud-buttons">
+                        <button class="btn-primary" id="cloudUploadBtn">
+                            <i class="fas fa-cloud-upload-alt fa-icon"></i> Upload to Cloud
+                        </button>
+                        <button class="btn-secondary" id="cloudLoadBtn">
+                            <i class="fas fa-cloud-download-alt fa-icon"></i> Load from Cloud
+                        </button>
+                    </div>
+
+                    <div id="cloudStatus" class="cloud-status-badge" style="display:none;">
+                        <span class="dot" id="cloudStatusDot"></span>
+                        <span id="cloudStatusText">Connected</span>
+                    </div>
+
+                    <div style="margin-top:12px;font-size:12px;color:#94a3b8;border-top:1px solid #e9edf2;padding-top:12px;">
+                        <i class="fas fa-info-circle fa-icon"></i>
+                        <strong>Username</strong> — your unique identifier &bull;
+                        <strong>Access code</strong> — required for uploads (write protection)
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ========== CLOUD MODAL ========== -->
+    <div class="modal-overlay" id="cloudModal">
+        <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cloudModalTitle" aria-describedby="cloudModalSub">
+            <div class="modal-title" id="cloudModalTitle">
+                <i class="fas fa-cloud-upload-alt fa-icon"></i> Upload to Cloud
+            </div>
+            <div class="modal-sub" id="cloudModalSub">Enter your credentials to save this invoice to the cloud.</div>
+
+            <div class="form-group">
+                <label for="cloudUsernameInput"><i class="fas fa-user fa-icon"></i> Username</label>
+                <input type="text" id="cloudUsernameInput" placeholder="e.g. johndoe" inputmode="text" autocomplete="username" />
+            </div>
+
+            <div class="form-group" id="cloudAccessCodeGroup">
+                <label for="cloudAccessCodeInput"><i class="fas fa-key fa-icon"></i> Access Code</label>
+                <input type="password" id="cloudAccessCodeInput" placeholder="Your secret access code" autocomplete="current-password" />
+                <span style="font-size:11px;color:#94a3b8;margin-top:2px;">Required for uploads. Keep it safe — you'll need it to update.</span>
+            </div>
+
+            <div class="modal-status" id="cloudModalStatus"></div>
+
+            <div class="modal-actions">
+                <button class="btn-secondary" id="cloudModalCancelBtn">Cancel</button>
+                <button class="btn-primary" id="cloudModalActionBtn">
+                    <i class="fas fa-cloud-upload-alt fa-icon"></i> Upload
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
