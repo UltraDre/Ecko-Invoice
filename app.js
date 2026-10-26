@@ -56,7 +56,7 @@
             let lastSchemaError = null;
             for (const columns of USER_COLUMN_VARIANTS) {
                 const query = new URLSearchParams({
-                    select: `${columns.username},${columns.password}`,
+                    select: `${columns.username},${columns.accessCode}`,
                     [columns.username]: `eq.${username}`,
                     limit: '1',
                 });
@@ -76,14 +76,14 @@
         }
 
         function hexToBytes(hex) {
-            if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) throw new Error('Invalid password verifier.');
+            if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) throw new Error('Invalid access-code verifier.');
             return new Uint8Array(hex.match(/.{2}/g).map((byte) => parseInt(byte, 16)));
         }
 
-        async function derivePasswordHash(password, salt, iterations) {
-            if (!window.crypto?.subtle) throw new Error('Secure password hashing requires HTTPS or localhost.');
+        async function deriveAccessCodeHash(accessCode, salt, iterations) {
+            if (!window.crypto?.subtle) throw new Error('Secure access-code verification requires HTTPS or localhost.');
             const material = await window.crypto.subtle.importKey(
-                'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']
+                'raw', new TextEncoder().encode(accessCode), 'PBKDF2', false, ['deriveBits']
             );
             const bits = await window.crypto.subtle.deriveBits({
                 name: 'PBKDF2',
@@ -94,11 +94,11 @@
             return bytesToHex(new Uint8Array(bits));
         }
 
-        async function createPasswordVerifier(password) {
+        async function createAccessCodeVerifier(accessCode) {
             const salt = window.crypto.getRandomValues(new Uint8Array(16));
             const saltHex = bytesToHex(salt);
-            const hash = await derivePasswordHash(password, salt, PASSWORD_HASH_ITERATIONS);
-            return `pbkdf2-sha256$${PASSWORD_HASH_ITERATIONS}$${saltHex}$${hash}`;
+            const hash = await deriveAccessCodeHash(accessCode, salt, ACCESS_CODE_HASH_ITERATIONS);
+            return `pbkdf2-sha256$${ACCESS_CODE_HASH_ITERATIONS}$${saltHex}$${hash}`;
         }
 
         function constantTimeHexEqual(left, right) {
@@ -110,18 +110,18 @@
             return difference === 0;
         }
 
-        async function verifyPassword(password, storedVerifier) {
-            if (typeof storedVerifier !== 'string') return { valid: false, needsUpgrade: false };
+        async function verifyAccessCode(accessCode, storedVerifier) {
+            if (typeof storedVerifier !== 'string') return { valid: false, needsSessionVerifier: false };
             if (!storedVerifier.startsWith('pbkdf2-sha256$')) {
-                return { valid: password === storedVerifier, needsUpgrade: true };
+                return { valid: accessCode === storedVerifier, needsSessionVerifier: true };
             }
             const [, iterationsText, saltHex, expectedHash] = storedVerifier.split('$');
             const iterations = Number(iterationsText);
             if (!Number.isInteger(iterations) || iterations < 100000 || iterations > 1000000 || !saltHex || !expectedHash) {
-                return { valid: false, needsUpgrade: false };
+                return { valid: false, needsSessionVerifier: false };
             }
-            const actualHash = await derivePasswordHash(password, hexToBytes(saltHex), iterations);
-            return { valid: constantTimeHexEqual(actualHash, expectedHash), needsUpgrade: false };
+            const actualHash = await deriveAccessCodeHash(accessCode, hexToBytes(saltHex), iterations);
+            return { valid: constantTimeHexEqual(actualHash, expectedHash), needsSessionVerifier: false };
         }
 
         function authErrorMessage(error) {
@@ -130,6 +130,9 @@
                 return 'Supabase denied access. Check the users table Row Level Security policies.';
             }
             if (error?.code === '23505') return 'That username is already taken.';
+            if (error?.code === '23502') {
+                return 'Sign-up requires a configured default value for users.Access_Code in Supabase.';
+            }
             if (isMissingUserColumn(error)) {
                 return 'Could not read the users table. It must expose Username and Access_Code (or lowercase equivalents).';
             }
@@ -157,10 +160,10 @@
         const AUTH_SESSION_KEY = 'eckoInvoiceSession';
         const THEME_STORAGE_KEY = 'eckoInvoiceTheme';
         const USER_COLUMN_VARIANTS = [
-            { username: 'Username', password: 'Access_Code' },
-            { username: 'username', password: 'access_code' },
+            { username: 'Username', accessCode: 'Access_Code' },
+            { username: 'username', accessCode: 'access_code' },
         ];
-        const PASSWORD_HASH_ITERATIONS = 310000;
+        const ACCESS_CODE_HASH_ITERATIONS = 310000;
         let currentUser = null;
         let currentHistoryId = null;
         let authMode = 'login';
@@ -1709,7 +1712,7 @@
                 return false;
             }
             if (!accessCode) {
-                setCloudModalStatus('Please enter your account password.', 'error');
+                setCloudModalStatus('Please enter your account access code.', 'error');
                 return false;
             }
             if (currentUser && username.trim() !== currentUser.username) {
@@ -1733,20 +1736,20 @@
             setCloudModalStatus('Uploading to cloud…', 'info');
 
             try {
-                let cloudVerifier = accessCodeValue;
-                if (currentUser) {
-                    const verification = await verifyPassword(accessCodeValue, currentUser.accessCodeHash);
-                    if (!verification.valid) {
-                        setCloudModalStatus('Password does not match the signed-in account.', 'error');
-                        return false;
-                    }
-                    if (currentUser.accessCodeHash.startsWith('pbkdf2-sha256$')) {
-                        cloudVerifier = currentUser.accessCodeHash;
-                    } else {
-                        cloudVerifier = await createPasswordVerifier(accessCodeValue);
-                        currentUser.accessCodeHash = cloudVerifier;
-                        storeAccountSession(currentUser.username, cloudVerifier, currentUser.columns, { legacyCredential: true });
-                    }
+                const { record: userRecord, columns: userColumns } = await findUserRecord(usernameValue);
+                if (!userRecord) {
+                    setCloudModalStatus('No account was found for that username. Create an account before uploading.', 'error');
+                    return false;
+                }
+                const accountCredential = userRecord[userColumns.accessCode];
+                if (typeof accountCredential !== 'string' || accountCredential.length === 0) {
+                    setCloudModalStatus('This account has no Access_Code value. Configure users.Access_Code in Supabase before uploading.', 'error');
+                    return false;
+                }
+                const accountVerification = await verifyAccessCode(accessCodeValue, accountCredential);
+                if (!accountVerification.valid) {
+                    setCloudModalStatus('Incorrect username or access code.', 'error');
+                    return false;
                 }
 
                 const lookup = new URLSearchParams({
@@ -1756,10 +1759,29 @@
                 });
                 const records = await supabaseRequest(`invoice_backups?${lookup.toString()}`);
                 const existing = Array.isArray(records) ? records[0] : null;
+                if (existing) {
+                    const cloudVerification = await verifyAccessCode(accessCodeValue, existing.access_code);
+                    if (!cloudVerification.valid) {
+                        setCloudModalStatus('The access code does not match this cloud backup. No data was changed.', 'error');
+                        return false;
+                    }
+                }
 
-                if (existing && existing.access_code !== cloudVerifier && existing.access_code !== accessCodeValue) {
-                    setCloudModalStatus('Password / access code does not match this backup.', 'error');
-                    return false;
+                // Keep a matching verifier when possible. For plaintext database or
+                // backup values, create a salted verifier without changing users.Access_Code.
+                let cloudVerifier = null;
+                if (existing?.access_code?.startsWith('pbkdf2-sha256$')) {
+                    cloudVerifier = existing.access_code;
+                } else if (accountCredential.startsWith('pbkdf2-sha256$')) {
+                    cloudVerifier = accountCredential;
+                } else if (
+                    currentUser?.username === usernameValue
+                    && currentUser.accessCodeHash?.startsWith('pbkdf2-sha256$')
+                    && (await verifyAccessCode(accessCodeValue, currentUser.accessCodeHash)).valid
+                ) {
+                    cloudVerifier = currentUser.accessCodeHash;
+                } else {
+                    cloudVerifier = await createAccessCodeVerifier(accessCodeValue);
                 }
 
                 const values = {
@@ -2198,14 +2220,14 @@
             $('signupModeBtn').setAttribute('aria-selected', String(signingUp));
             $('authHeading').textContent = signingUp ? 'Create your account' : 'Welcome back';
             $('authDescription').textContent = signingUp
-                ? 'Choose a username and password to create your invoice workspace.'
+                ? 'Enter your username and the configured access code to create your invoice workspace.'
                 : 'Sign in to see and manage your saved invoices.';
             $('authSubmitBtn').innerHTML = signingUp
                 ? '<i class="fas fa-user-plus fa-icon" aria-hidden="true"></i> Create account'
                 : '<i class="fas fa-arrow-right-to-bracket fa-icon" aria-hidden="true"></i> Log in';
-            $('authPassword').autocomplete = signingUp ? 'new-password' : 'current-password';
-            $('authPassword').minLength = signingUp ? 8 : 1;
-            $('passwordHint').hidden = !signingUp;
+            $('authAccessCode').autocomplete = 'off';
+            $('authAccessCode').minLength = 1;
+            $('accessCodeHint').hidden = !signingUp;
             showAuthFeedback('');
         }
 
@@ -2230,7 +2252,7 @@
             resetInvoiceData(true);
             setAppView('auth');
             $('authUsername').value = '';
-            $('authPassword').value = '';
+            $('authAccessCode').value = '';
             setAuthMode('login');
         }
 
@@ -2299,18 +2321,14 @@
         async function handleAuthSubmit(event) {
             event.preventDefault();
             const username = $('authUsername').value.trim();
-            const password = $('authPassword').value;
+            const accessCode = $('authAccessCode').value;
             const usernamePattern = /^[A-Za-z0-9._-]{3,64}$/;
             if (!usernamePattern.test(username)) {
                 showAuthFeedback('Use 3–64 letters, numbers, dots, dashes, or underscores for your username.', 'error');
                 return;
             }
-            if (authMode === 'signup' && password.length < 8) {
-                showAuthFeedback('Choose a password with at least 8 characters.', 'error');
-                return;
-            }
-            if (!password) {
-                showAuthFeedback('Enter your password.', 'error');
+            if (!accessCode) {
+                showAuthFeedback('Enter your access code.', 'error');
                 return;
             }
             if (!navigator.onLine) {
@@ -2331,37 +2349,68 @@
                         showAuthFeedback('That username is already taken. Try logging in instead.', 'error');
                         return;
                     }
-                    const verifier = await createPasswordVerifier(password);
-                    await supabaseRequest('users', {
+
+                    // Omit Access_Code so Supabase, not the browser, applies its configured default.
+                    const createdRows = await supabaseRequest('users', {
                         method: 'POST',
-                        body: { [columns.username]: username, [columns.password]: verifier },
-                        headers: { Prefer: 'return=minimal' },
+                        body: { [columns.username]: username },
+                        headers: { Prefer: 'return=representation' },
                     });
-                    $('authPassword').value = '';
+                    let createdRecord = Array.isArray(createdRows) ? createdRows[0] || null : null;
+                    let createdColumns = columns;
+                    if (typeof createdRecord?.[createdColumns.accessCode] !== 'string') {
+                        const createdLookup = await findUserRecord(username);
+                        createdRecord = createdLookup.record;
+                        createdColumns = createdLookup.columns;
+                    }
+                    const storedVerifier = createdRecord?.[createdColumns.accessCode];
+                    if (typeof storedVerifier !== 'string' || storedVerifier.length === 0) {
+                        showAuthFeedback(
+                            'Account created, but Supabase returned no users.Access_Code value. Configure its default and check the row in Supabase before logging in.',
+                            'error'
+                        );
+                        return;
+                    }
+
+                    const verification = await verifyAccessCode(accessCode, storedVerifier);
+                    if (!verification.valid) {
+                        showAuthFeedback(
+                            'Account created, but the access code entered does not match the value configured in users.Access_Code. Fix the Supabase value/default, then log in with that code.',
+                            'error'
+                        );
+                        return;
+                    }
+
+                    const sessionVerifier = verification.needsSessionVerifier
+                        ? await createAccessCodeVerifier(accessCode)
+                        : storedVerifier;
+                    $('authAccessCode').value = '';
                     showAuthFeedback('Account created. Opening your invoice workspace…', 'success');
-                    await enterAccount(username, verifier, columns);
+                    await enterAccount(username, sessionVerifier, createdColumns, {
+                        legacyCredential: verification.needsSessionVerifier,
+                    });
                     return;
                 }
 
                 if (!record) {
-                    showAuthFeedback('Incorrect username or password.', 'error');
+                    showAuthFeedback('Incorrect username or access code.', 'error');
                     return;
                 }
-                const storedVerifier = record[columns.password];
-                const verification = await verifyPassword(password, storedVerifier);
+                const storedVerifier = record[columns.accessCode];
+                const verification = await verifyAccessCode(accessCode, storedVerifier);
                 if (!verification.valid) {
-                    showAuthFeedback('Incorrect username or password.', 'error');
+                    showAuthFeedback('Incorrect username or access code.', 'error');
                     return;
                 }
 
                 let sessionVerifier = storedVerifier;
-                if (verification.needsUpgrade) {
+                if (verification.needsSessionVerifier) {
                     // Keep the database Access_Code untouched; use a local verifier for this session.
-                    sessionVerifier = await createPasswordVerifier(password);
+                    sessionVerifier = await createAccessCodeVerifier(accessCode);
                 }
-                $('authPassword').value = '';
+                $('authAccessCode').value = '';
                 showAuthFeedback('Signed in. Loading your invoices…', 'success');
-                await enterAccount(username, sessionVerifier, columns, { legacyCredential: verification.needsUpgrade });
+                await enterAccount(username, sessionVerifier, columns, { legacyCredential: verification.needsSessionVerifier });
             } catch (error) {
                 console.error('Account request failed:', error);
                 showAuthFeedback(authErrorMessage(error), 'error');
@@ -2387,9 +2436,9 @@
             }
             try {
                 const { record, columns } = await findUserRecord(session.username);
-                const storedVerifier = record?.[columns.password];
+                const storedVerifier = record?.[columns.accessCode];
                 const sessionValid = session.legacyCredential === true
-                    ? (await verifyPassword(storedVerifier, session.verifier)).valid
+                    ? (await verifyAccessCode(storedVerifier, session.verifier)).valid
                     : storedVerifier === session.verifier;
                 if (!record || !sessionValid) {
                     sessionStorage.removeItem(AUTH_SESSION_KEY);
@@ -2419,7 +2468,7 @@
             $('signupModeBtn').addEventListener('click', () => setAuthMode('signup'));
             $('authForm').addEventListener('submit', handleAuthSubmit);
             $('authUsername').addEventListener('input', () => showAuthFeedback(''));
-            $('authPassword').addEventListener('input', () => showAuthFeedback(''));
+            $('authAccessCode').addEventListener('input', () => showAuthFeedback(''));
             setAuthMode('login');
         }
 

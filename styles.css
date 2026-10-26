@@ -1978,7 +1978,7 @@
             color: #047857;
         }
 
-        .auth-password-hint {
+        .auth-access-code-hint {
             margin-top: 2px;
             color: #94a3b8;
             font-size: 12px;
@@ -2534,7 +2534,7 @@
             }
 
             html[data-theme="dark"] .auth-feedback,
-            html[data-theme="dark"] .auth-password-hint,
+            html[data-theme="dark"] .auth-access-code-hint,
             html[data-theme="dark"] .auth-footnote,
             html[data-theme="dark"] .text-muted,
             html[data-theme="dark"] .history-item .info .meta,
