@@ -57,10 +57,10 @@
                     <label for="authUsername">Username</label>
                     <input type="text" id="authUsername" name="username" placeholder="Enter your username" autocomplete="username" autocapitalize="none" minlength="3" maxlength="64" pattern="[A-Za-z0-9._-]+" required />
                 </div>
-                <div class="form-group auth-password-group">
-                    <label for="authPassword">Password</label>
-                    <input type="password" id="authPassword" name="password" placeholder="Enter your password" autocomplete="current-password" minlength="1" maxlength="256" required />
-                    <span class="auth-password-hint" id="passwordHint" hidden>Use at least 8 characters.</span>
+                <div class="form-group auth-access-code-group">
+                    <label for="authAccessCode">Access code</label>
+                    <input type="password" id="authAccessCode" name="accessCode" placeholder="Enter your access code" autocomplete="off" minlength="1" maxlength="256" required />
+                    <span class="auth-access-code-hint" id="accessCodeHint" hidden>Use the access code configured for this account.</span>
                 </div>
                 <p class="auth-feedback" id="authFeedback" role="status" aria-live="polite"></p>
                 <button class="btn-primary auth-submit" id="authSubmitBtn" type="submit">
@@ -464,8 +464,8 @@
             </div>
 
             <div class="form-group" id="cloudAccessCodeGroup">
-                <label for="cloudAccessCodeInput"><i class="fas fa-key fa-icon"></i> Password / access code</label>
-                <input type="password" id="cloudAccessCodeInput" placeholder="Your account password" autocomplete="current-password" />
+                <label for="cloudAccessCodeInput"><i class="fas fa-key fa-icon"></i> Access code</label>
+                <input type="password" id="cloudAccessCodeInput" placeholder="Your account access code" autocomplete="off" />
                 <span style="font-size:11px;color:#94a3b8;margin-top:2px;">Used to protect updates to this cloud backup.</span>
             </div>
 

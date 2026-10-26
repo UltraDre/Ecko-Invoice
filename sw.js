@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ecko-invoice-v6';
+const CACHE_NAME = 'ecko-invoice-v7';
 const APP_SHELL = [
   './index.html',
   './styles.css',

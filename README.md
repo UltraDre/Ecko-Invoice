@@ -25,11 +25,11 @@ Then open `http://localhost:4173`. For production, deploy the folder to any stat
 
 ## Data and cloud backup
 
-Sign-up and login use the existing Supabase `users` table with `Username` and `Access_Code` text columns (lowercase `username` / `access_code` is also recognized). New passwords are stored as salted PBKDF2-SHA-256 verifiers in `Access_Code`. Existing plain-text `Access_Code` values are still verified for login compatibility, but login does not modify the users table. Usernames scope each account's local invoice data. Use **Download backup** regularly; restoring a JSON backup replaces that account's local data.
+Sign-up and login use the existing Supabase `users` table with `Username` and `Access_Code` text columns (lowercase `username` / `access_code` is also recognized). Sign-up inserts only the username so Supabase applies the configured `Access_Code` default; the entered access code is checked against that value. Login and sign-up do not replace or randomize `Access_Code`. Existing PBKDF2 verifier rows remain supported. The same access code is used to sign in and authorize manual cloud uploads. Usernames scope each account's local invoice data. Use **Download backup** regularly; restoring a JSON backup replaces that account's local data.
 
 Invoices and drafts are saved locally as you edit, then automatically synced (debounced) to the Supabase `invoice_backups` table with `username`, `access_code`, `data`, and `updated_at` columns. New cloud rows store the account's PBKDF2 verifier in `access_code`; legacy plain access codes are upgraded on sync. Offline edits stay local and are pushed when connectivity returns. Sign-up/login require internet; editing, previews, history, printing, and PDF downloads work offline.
 
-**Security:** This is a static browser app using a publishable Supabase key. Client-side password hashing protects against storing new passwords in plain text, but it is not a substitute for server-side authentication. Configure strict Row Level Security and do not expose unrestricted `SELECT` access to `users`; for sensitive production data, move credential verification and authorization into a server-side RPC/Edge Function or Supabase Auth. A publishable key must never be treated as a secret.
+**Security:** This is a static browser app using a publishable Supabase key. Access-code checks happen in the browser; if the configured `Access_Code` default is plain text, the database stores that code. Configure strict Row Level Security and do not expose unrestricted `SELECT` access to `users`; for sensitive production data, move credential verification and authorization into a server-side RPC/Edge Function or Supabase Auth. A publishable key must never be treated as a secret.
 
 ## PWA notes
 
