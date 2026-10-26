@@ -25,7 +25,7 @@ Then open `http://localhost:4173`. For production, deploy the folder to any stat
 
 ## Data and cloud backup
 
-Sign-up and login use the existing Supabase `users` table with `Username` and `Access_Code` text columns (lowercase `username` / `access_code` is also recognized). New passwords are stored as salted PBKDF2-SHA-256 verifiers in `Access_Code`; a legacy plain-text value is upgraded after a successful login when the table permits updates. Usernames scope each account's local invoice data. Use **Download backup** regularly; restoring a JSON backup replaces that account's local data.
+Sign-up and login use the existing Supabase `users` table with `Username` and `Access_Code` text columns (lowercase `username` / `access_code` is also recognized). New passwords are stored as salted PBKDF2-SHA-256 verifiers in `Access_Code`. Existing plain-text `Access_Code` values are still verified for login compatibility, but login does not modify the users table. Usernames scope each account's local invoice data. Use **Download backup** regularly; restoring a JSON backup replaces that account's local data.
 
 Invoices and drafts are saved locally as you edit, then automatically synced (debounced) to the Supabase `invoice_backups` table with `username`, `access_code`, `data`, and `updated_at` columns. New cloud rows store the account's PBKDF2 verifier in `access_code`; legacy plain access codes are upgraded on sync. Offline edits stay local and are pushed when connectivity returns. Sign-up/login require internet; editing, previews, history, printing, and PDF downloads work offline.
 

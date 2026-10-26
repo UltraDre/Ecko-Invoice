@@ -1745,12 +1745,7 @@
                     } else {
                         cloudVerifier = await createPasswordVerifier(accessCodeValue);
                         currentUser.accessCodeHash = cloudVerifier;
-                        storeAccountSession(currentUser.username, cloudVerifier, currentUser.columns);
-                        try {
-                            await upgradeLegacyPassword(usernameValue, currentUser.columns, cloudVerifier);
-                        } catch (error) {
-                            console.warn('Legacy account password could not be upgraded during cloud sync:', error);
-                        }
+                        storeAccountSession(currentUser.username, cloudVerifier, currentUser.columns, { legacyCredential: true });
                     }
                 }
 
@@ -2214,12 +2209,17 @@
             showAuthFeedback('');
         }
 
-        function storeAccountSession(username, verifier, columns) {
+        function storeAccountSession(username, verifier, columns, options = {}) {
             if (typeof verifier !== 'string' || !verifier.startsWith('pbkdf2-sha256$')) {
                 sessionStorage.removeItem(AUTH_SESSION_KEY);
                 return;
             }
-            sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ username, verifier, columns }));
+            sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
+                username,
+                verifier,
+                columns,
+                legacyCredential: options.legacyCredential === true,
+            }));
         }
 
         function clearAccountSession() {
@@ -2234,21 +2234,11 @@
             setAuthMode('login');
         }
 
-        async function upgradeLegacyPassword(username, columns, newVerifier) {
-            const filters = new URLSearchParams({
-                [columns.username]: `eq.${username}`,
-            });
-            const updated = await supabaseRequest(`users?${filters.toString()}`, {
-                method: 'PATCH',
-                body: { [columns.password]: newVerifier },
-                headers: { Prefer: 'return=representation' },
-            });
-            return Array.isArray(updated) && updated.length > 0;
-        }
-
         async function enterAccount(username, verifier, columns, options = {}) {
             currentUser = { username, accessCodeHash: verifier, columns };
-            if (options.persistSession !== false) storeAccountSession(username, verifier, columns);
+            if (options.persistSession !== false) {
+                storeAccountSession(username, verifier, columns, { legacyCredential: options.legacyCredential === true });
+            }
             migrateLegacyLocalData();
 
             clearTimeout(saveTimeout);
@@ -2366,17 +2356,12 @@
 
                 let sessionVerifier = storedVerifier;
                 if (verification.needsUpgrade) {
-                    const upgradedVerifier = await createPasswordVerifier(password);
-                    sessionVerifier = upgradedVerifier;
-                    try {
-                        await upgradeLegacyPassword(username, columns, upgradedVerifier);
-                    } catch (error) {
-                        console.warn('Legacy password could not be upgraded:', error);
-                    }
+                    // Keep the database Access_Code untouched; use a local verifier for this session.
+                    sessionVerifier = await createPasswordVerifier(password);
                 }
                 $('authPassword').value = '';
                 showAuthFeedback('Signed in. Loading your invoices…', 'success');
-                await enterAccount(username, sessionVerifier, columns);
+                await enterAccount(username, sessionVerifier, columns, { legacyCredential: verification.needsUpgrade });
             } catch (error) {
                 console.error('Account request failed:', error);
                 showAuthFeedback(authErrorMessage(error), 'error');
@@ -2402,11 +2387,18 @@
             }
             try {
                 const { record, columns } = await findUserRecord(session.username);
-                if (!record || record[columns.password] !== session.verifier) {
+                const storedVerifier = record?.[columns.password];
+                const sessionValid = session.legacyCredential === true
+                    ? (await verifyPassword(storedVerifier, session.verifier)).valid
+                    : storedVerifier === session.verifier;
+                if (!record || !sessionValid) {
                     sessionStorage.removeItem(AUTH_SESSION_KEY);
                     return false;
                 }
-                await enterAccount(session.username, session.verifier, columns, { persistSession: false });
+                await enterAccount(session.username, session.verifier, columns, {
+                    persistSession: false,
+                    legacyCredential: session.legacyCredential === true,
+                });
                 return true;
             } catch (error) {
                 console.warn('Could not validate the saved account session:', error);
